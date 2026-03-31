@@ -17,7 +17,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "seed:categories": "node src/seeds/seed-categories.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
