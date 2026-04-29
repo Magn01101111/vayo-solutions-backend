@@ -1,31 +1,31 @@
 const express = require('express');
 const { body } = require('express-validator');
 const {
-  getCategories,
-  getCategoryById,
-  createCategory,
-  updateCategory,
-  deactivateCategory,
-} = require('../controllers/category.controller');
+  getClients,
+  getClientById,
+  createClient,
+  updateClient,
+  deactivateClient,
+} = require('../controllers/client.controller');
 const { verifyToken, requireRole } = require('../middlewares/auth.middleware');
 const { handleValidation } = require('../middlewares/validate.middleware');
 const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
 
-// Lectura: ADMIN y COTIZADOR
+// Lectura: ADMIN y COTIZADOR pueden ver clientes (para crear cotizaciones)
 router.get(
   '/',
   verifyToken,
   requireRole(ROLES.ADMIN, ROLES.COTIZADOR),
-  getCategories
+  getClients
 );
 
 router.get(
   '/:id',
   verifyToken,
   requireRole(ROLES.ADMIN, ROLES.COTIZADOR),
-  getCategoryById
+  getClientById
 );
 
 // Escritura: solo ADMIN
@@ -34,24 +34,24 @@ router.post(
   verifyToken,
   requireRole(ROLES.ADMIN),
   [
-    body('name').notEmpty().withMessage('El nombre de la categoría es requerido'),
+    body('name').notEmpty().withMessage('El nombre es requerido'),
     handleValidation,
   ],
-  createCategory
+  createClient
 );
 
 router.put(
   '/:id',
   verifyToken,
   requireRole(ROLES.ADMIN),
-  updateCategory
+  updateClient
 );
 
 router.patch(
   '/:id/deactivate',
   verifyToken,
   requireRole(ROLES.ADMIN),
-  deactivateCategory
+  deactivateClient
 );
 
 module.exports = router;

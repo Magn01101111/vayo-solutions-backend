@@ -126,4 +126,8 @@ const productSchema = new mongoose.Schema(
   }
 );
 
+// Índices para búsqueda optimizada (HU 04-2026-024)
+productSchema.index({ name: 'text', sku: 'text', brand: 'text', model: 'text' });
+productSchema.index({ isActive: 1, category: 1 });
+
 module.exports = mongoose.model('Product', productSchema);
