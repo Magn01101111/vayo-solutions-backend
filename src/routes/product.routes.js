@@ -8,29 +8,18 @@ const {
   deactivateProduct,
   uploadProductImage: uploadImageHandler,
 } = require('../controllers/product.controller');
-const { verifyToken, requireRole } = require('../middlewares/auth.middleware');
+const { verifyToken, requireRole, optionalAuth } = require('../middlewares/auth.middleware');
 const { handleValidation } = require('../middlewares/validate.middleware');
 const { uploadProductImage } = require('../middlewares/upload.middleware');
 const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
 
-// Lectura: ADMIN y COTIZADOR
-router.get(
-  '/',
-  verifyToken,
-  requireRole(ROLES.ADMIN, ROLES.COTIZADOR),
-  getProducts
-);
+// ── Lectura pública (ADMIN puede usar ?all=true para ver inactivos) ───────────
+router.get('/', optionalAuth, getProducts);
+router.get('/:id', optionalAuth, getProductById);
 
-router.get(
-  '/:id',
-  verifyToken,
-  requireRole(ROLES.ADMIN, ROLES.COTIZADOR),
-  getProductById
-);
-
-// Escritura: solo ADMIN
+// ── Escritura: solo ADMIN ─────────────────────────────────────────────────────
 router.post(
   '/',
   verifyToken,
@@ -45,21 +34,11 @@ router.post(
   createProduct
 );
 
-router.put(
-  '/:id',
-  verifyToken,
-  requireRole(ROLES.ADMIN),
-  updateProduct
-);
+router.put('/:id', verifyToken, requireRole(ROLES.ADMIN), updateProduct);
 
-router.patch(
-  '/:id/deactivate',
-  verifyToken,
-  requireRole(ROLES.ADMIN),
-  deactivateProduct
-);
+router.patch('/:id/deactivate', verifyToken, requireRole(ROLES.ADMIN), deactivateProduct);
 
-// POST /api/products/:id/image  → subir imagen
+// POST /api/products/:id/image  → subir imagen (solo ADMIN)
 router.post(
   '/:id/image',
   verifyToken,

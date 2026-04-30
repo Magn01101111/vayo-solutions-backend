@@ -5,8 +5,10 @@ const { ROLES } = require('../constants/roles');
 const { sendPasswordResetEmail } = require('../services/email.service');
 const {
   ok,
+  created,
   fail,
   unauthorized,
+  conflict,
   notFound,
   serverError,
 } = require('../utils/response');
@@ -37,6 +39,36 @@ function mapUserPublic(user) {
     position: user.position,
     profileImage: user.profileImage,
   };
+}
+
+// ── POST /api/auth/register ───────────────────────────────────────────────────
+// Auto-registro público — siempre crea un usuario con rol CLIENTE
+async function register(req, res) {
+  try {
+    const { name, email, password, phone } = req.body;
+
+    const exists = await User.findOne({ email });
+    if (exists) return conflict(res, 'El correo ya está registrado');
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phone,
+      role: ROLES.CLIENTE,
+    });
+
+    // Auto-login: devolvemos token + perfil igual que /login
+    const token = generateToken(user);
+
+    return created(res, {
+      token,
+      user: mapUserPublic(user),
+      redirectTo: ROLE_REDIRECT[ROLES.CLIENTE],
+    });
+  } catch (error) {
+    return serverError(res, error);
+  }
 }
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
@@ -151,7 +183,11 @@ async function requestPasswordReset(req, res) {
       }
     );
 
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
+    // Tomar la primera URL en caso de que FRONTEND_URL tenga múltiples valores
+    const frontendBase = (process.env.FRONTEND_URL || 'http://localhost:4200')
+      .split(',')[0]
+      .trim();
+    const resetUrl = `${frontendBase}/reset-password?token=${token}`;
     await sendPasswordResetEmail(user.email, resetUrl);
 
     return ok(res, {
@@ -190,6 +226,7 @@ async function confirmPasswordReset(req, res) {
 }
 
 module.exports = {
+  register,
   login,
   logout,
   getProfile,

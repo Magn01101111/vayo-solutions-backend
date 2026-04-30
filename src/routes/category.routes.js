@@ -7,28 +7,17 @@ const {
   updateCategory,
   deactivateCategory,
 } = require('../controllers/category.controller');
-const { verifyToken, requireRole } = require('../middlewares/auth.middleware');
+const { verifyToken, requireRole, optionalAuth } = require('../middlewares/auth.middleware');
 const { handleValidation } = require('../middlewares/validate.middleware');
 const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
 
-// Lectura: ADMIN y COTIZADOR
-router.get(
-  '/',
-  verifyToken,
-  requireRole(ROLES.ADMIN, ROLES.COTIZADOR),
-  getCategories
-);
+// ── Lectura pública (ADMIN puede usar ?all=true para ver inactivas) ───────────
+router.get('/', optionalAuth, getCategories);
+router.get('/:id', optionalAuth, getCategoryById);
 
-router.get(
-  '/:id',
-  verifyToken,
-  requireRole(ROLES.ADMIN, ROLES.COTIZADOR),
-  getCategoryById
-);
-
-// Escritura: solo ADMIN
+// ── Escritura: solo ADMIN ─────────────────────────────────────────────────────
 router.post(
   '/',
   verifyToken,
@@ -40,18 +29,8 @@ router.post(
   createCategory
 );
 
-router.put(
-  '/:id',
-  verifyToken,
-  requireRole(ROLES.ADMIN),
-  updateCategory
-);
+router.put('/:id', verifyToken, requireRole(ROLES.ADMIN), updateCategory);
 
-router.patch(
-  '/:id/deactivate',
-  verifyToken,
-  requireRole(ROLES.ADMIN),
-  deactivateCategory
-);
+router.patch('/:id/deactivate', verifyToken, requireRole(ROLES.ADMIN), deactivateCategory);
 
 module.exports = router;

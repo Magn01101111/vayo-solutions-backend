@@ -16,11 +16,24 @@ app.use(
 );
 
 // ── CORS ───────────────────────────────────────────────────────────────────────
+// Soporta múltiples orígenes separados por coma en FRONTEND_URL
+const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:4200')
+  .split(',')
+  .map((s) => s.trim());
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || '*',
+    origin: (origin, callback) => {
+      // Permitir peticiones sin origin (curl, Postman, SSR)
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
+      }
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
   })
 );
 

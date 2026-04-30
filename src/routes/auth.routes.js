@@ -1,6 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const {
+  register,
   login,
   logout,
   getProfile,
@@ -12,6 +13,20 @@ const { verifyToken } = require('../middlewares/auth.middleware');
 const { handleValidation } = require('../middlewares/validate.middleware');
 
 const router = express.Router();
+
+// POST /api/auth/register  (público — crea cuenta CLIENTE)
+router.post(
+  '/register',
+  [
+    body('name').notEmpty().withMessage('El nombre es requerido'),
+    body('email').isEmail().withMessage('Email inválido'),
+    body('password')
+      .isLength({ min: 8 })
+      .withMessage('La contraseña debe tener al menos 8 caracteres'),
+    handleValidation,
+  ],
+  register
+);
 
 // POST /api/auth/login
 router.post(
