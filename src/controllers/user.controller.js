@@ -202,3 +202,11 @@ module.exports = {
   updateProveedor,
   deactivateProveedor,
 };
+
+// NOTA: La gestión de usuarios CLIENTE NO vive aquí.
+//   - Auto-registro:    POST /api/auth/register
+//   - Invitar al portal: POST /api/clients/:id/invite
+//   - Revocar acceso:    DELETE /api/clients/:id/portal-access
+//   - Desactivar:        PATCH /api/clients/:id/deactivate (cascada al User)
+// La razón: un CLIENTE es ante todo una entidad CRM (Client). La cuenta de
+// portal es un atributo opcional de esa entidad.

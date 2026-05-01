@@ -50,6 +50,16 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // ── Vínculo CRM ───────────────────────────────────────────────────────────
+    // Solo presente cuando role === CLIENTE: referencia a su ficha en `clients`.
+    // Para ADMIN / COTIZADOR / PROVEEDOR siempre es null.
+    clientId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Client',
+      default: null,
+      index: true,
+    },
+
     // ── Seguridad ─────────────────────────────────────────────────────────────
     loginAttempts: {
       type: Number,

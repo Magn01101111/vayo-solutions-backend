@@ -11,10 +11,16 @@ const clientSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // RUT canónico: "12345678-9" (sin puntos, K en mayúscula).
+    // La validación y normalización se hace en el controller con validators.js.
+    // Índice único sparse: permite múltiples docs con rut=null (B2B sin RUT
+    // todavía), pero no duplicados cuando sí está definido.
     rut: {
       type: String,
       trim: true,
-      index: true,
+      uppercase: true,
+      default: null,
+      index: { unique: true, sparse: true },
     },
     email: {
       type: String,
@@ -41,6 +47,17 @@ const clientSchema = new mongoose.Schema(
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
+      default: null, // null = se auto-registró desde el portal público
+    },
+
+    // ── Vínculo con cuenta de portal ──────────────────────────────────────────
+    // Si está presente, este Client tiene una cuenta User[CLIENTE] que puede
+    // hacer login al portal. Si es null, es un cliente solo-CRM (sin acceso).
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
     },
   },
   {

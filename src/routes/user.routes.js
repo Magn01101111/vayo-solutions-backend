@@ -56,4 +56,6 @@ router.post(
 router.put('/proveedores/:id', updateProveedor);
 router.patch('/proveedores/:id/deactivate', deactivateProveedor);
 
+// NOTA: la gestión de CLIENTEs (CRM + portal) vive en /api/clients/*
+
 module.exports = router;

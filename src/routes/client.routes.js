@@ -6,6 +6,8 @@ const {
   createClient,
   updateClient,
   deactivateClient,
+  inviteToPortal,
+  revokePortalAccess,
 } = require('../controllers/client.controller');
 const { verifyToken, requireRole } = require('../middlewares/auth.middleware');
 const { handleValidation } = require('../middlewares/validate.middleware');
@@ -52,6 +54,29 @@ router.patch(
   verifyToken,
   requireRole(ROLES.ADMIN),
   deactivateClient
+);
+
+// ── Portal del cliente ────────────────────────────────────────────────────────
+// Crear cuenta de portal para un Client CRM existente
+router.post(
+  '/:id/invite',
+  verifyToken,
+  requireRole(ROLES.ADMIN),
+  [
+    body('password')
+      .isLength({ min: 8 })
+      .withMessage('La contraseña debe tener al menos 8 caracteres'),
+    handleValidation,
+  ],
+  inviteToPortal
+);
+
+// Revocar acceso al portal (elimina solo el User; el Client CRM queda)
+router.delete(
+  '/:id/portal-access',
+  verifyToken,
+  requireRole(ROLES.ADMIN),
+  revokePortalAccess
 );
 
 module.exports = router;

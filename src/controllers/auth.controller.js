@@ -1,7 +1,10 @@
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
+const Client = require('../models/client.model');
 const { ROLES } = require('../constants/roles');
+const { validateRut, normalizeChileanPhone } = require('../utils/validators');
 const { sendPasswordResetEmail } = require('../services/email.service');
 const {
   ok,
@@ -38,27 +41,77 @@ function mapUserPublic(user) {
     phone: user.phone,
     position: user.position,
     profileImage: user.profileImage,
+    clientId: user.clientId ?? null,
   };
 }
 
 // ── POST /api/auth/register ───────────────────────────────────────────────────
-// Auto-registro público — siempre crea un usuario con rol CLIENTE
+// Auto-registro público — crea atómicamente:
+//   1. User[CLIENTE]   (auth)
+//   2. Client          (CRM, vinculado al user)
+// Si cualquiera de los dos falla, se revierte todo (transacción).
 async function register(req, res) {
+  const session = await mongoose.startSession();
+
   try {
-    const { name, email, password, phone } = req.body;
+    const { name, email, password, phone, rut } = req.body;
 
-    const exists = await User.findOne({ email });
-    if (exists) return conflict(res, 'El correo ya está registrado');
+    // ── Validar RUT (obligatorio en self-registration) ────────────────────────
+    const canonicalRut = validateRut(rut);
+    if (!canonicalRut) {
+      return fail(res, 'RUT inválido. Verifica el dígito verificador.');
+    }
 
-    const user = await User.create({
-      name,
-      email,
-      password,
-      phone,
-      role: ROLES.CLIENTE,
+    // ── Normalizar teléfono (obligatorio para CLIENTE) ────────────────────────
+    const canonicalPhone = normalizeChileanPhone(phone);
+    if (!canonicalPhone) {
+      return fail(res, 'Teléfono inválido. Debe ser un móvil chileno (8 dígitos tras el 9).');
+    }
+
+    // ── Verificar email y RUT únicos (antes de abrir la transacción) ──────────
+    const [existsEmail, existsRut] = await Promise.all([
+      User.findOne({ email }),
+      Client.findOne({ rut: canonicalRut }),
+    ]);
+    if (existsEmail) return conflict(res, 'El correo ya está registrado');
+    if (existsRut)   return conflict(res, 'El RUT ya está registrado');
+
+    let user, client;
+
+    await session.withTransaction(async () => {
+      // 1. Crear el User (sin clientId aún)
+      const [createdUser] = await User.create(
+        [{
+          name,
+          email,
+          password,
+          phone: canonicalPhone,
+          role: ROLES.CLIENTE,
+        }],
+        { session }
+      );
+
+      // 2. Crear el Client CRM vinculado al user recién creado
+      const [createdClient] = await Client.create(
+        [{
+          name,
+          email,
+          phone: canonicalPhone,
+          rut: canonicalRut,
+          userId: createdUser._id,
+          createdBy: null, // se auto-registró, no lo creó un cotizador
+        }],
+        { session }
+      );
+
+      // 3. Vincular el User al Client
+      createdUser.clientId = createdClient._id;
+      await createdUser.save({ session });
+
+      user = createdUser;
+      client = createdClient;
     });
 
-    // Auto-login: devolvemos token + perfil igual que /login
     const token = generateToken(user);
 
     return created(res, {
@@ -68,6 +121,8 @@ async function register(req, res) {
     });
   } catch (error) {
     return serverError(res, error);
+  } finally {
+    session.endSession();
   }
 }
 

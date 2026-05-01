@@ -23,6 +23,8 @@ router.post(
     body('password')
       .isLength({ min: 8 })
       .withMessage('La contraseña debe tener al menos 8 caracteres'),
+    body('rut').notEmpty().withMessage('El RUT es requerido'),
+    body('phone').notEmpty().withMessage('El teléfono es requerido'),
     handleValidation,
   ],
   register

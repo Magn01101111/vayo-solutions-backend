@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const routes = require('./routes');
+const uploadRoutes  = require('./routes/upload.routes.js');
 
 const app = express();
 
@@ -53,6 +54,8 @@ app.use(
     path.join(process.cwd(), process.env.UPLOAD_PATH || 'uploads')
   )
 );
+
+
 
 // ── Rutas API ──────────────────────────────────────────────────────────────────
 app.use(routes);
