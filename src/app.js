@@ -4,7 +4,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const routes = require('./routes');
-const uploadRoutes  = require('./routes/upload.routes.js');
 
 const app = express();
 
@@ -17,19 +16,37 @@ app.use(
 );
 
 // ── CORS ───────────────────────────────────────────────────────────────────────
-// Soporta múltiples orígenes separados por coma en FRONTEND_URL
-const ALLOWED_ORIGINS = (process.env.FRONTEND_URL || 'http://localhost:4200')
+// Reglas de origen aceptado:
+//   1. Cualquier origen listado en FRONTEND_URL (separado por comas)
+//   2. Cualquier subdominio de *.netlify.app (incluye preview deploys)
+//   3. Cualquier subdominio de *.onrender.com (testing)
+// Esto permite que producción, staging y previews funcionen sin redeploy.
+const FRONTEND_URLS = (process.env.FRONTEND_URL || 'http://localhost:4200')
   .split(',')
-  .map((s) => s.trim());
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const ALLOWED_HOST_PATTERNS = [
+  /\.netlify\.app$/,   // *.netlify.app
+  /\.onrender\.com$/,  // *.onrender.com
+];
+
+function isOriginAllowed(origin) {
+  if (FRONTEND_URLS.includes('*') || FRONTEND_URLS.includes(origin)) return true;
+  try {
+    const { hostname } = new URL(origin);
+    return ALLOWED_HOST_PATTERNS.some((re) => re.test(hostname));
+  } catch {
+    return false;
+  }
+}
 
 app.use(
   cors({
     origin: (origin, callback) => {
       // Permitir peticiones sin origin (curl, Postman, SSR)
       if (!origin) return callback(null, true);
-      if (ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin)) {
-        return callback(null, true);
-      }
+      if (isOriginAllowed(origin)) return callback(null, true);
       callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -58,7 +75,7 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 
 // ── Rutas API ──────────────────────────────────────────────────────────────────
-app.use('/api/upload', uploadRoutes);
+// Nota: /api/upload se monta dentro de routes/index.js junto con el resto
 app.use(routes);
 
 // ── 404 genérico ───────────────────────────────────────────────────────────────
