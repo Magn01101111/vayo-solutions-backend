@@ -1,11 +1,8 @@
-import { v2 as cloudinary } from 'cloudinary';
-import dotenv from 'dotenv';
+const cloudinary = require('cloudinary').v2;
+require('dotenv').config();
 
-dotenv.config();
-
-// Solo esto, porque usa CLOUDINARY_URL automáticamente
 cloudinary.config({
-  secure: true,
+  secure: true, // usa CLOUDINARY_URL
 });
 
-export default cloudinary;
+module.exports = cloudinary;

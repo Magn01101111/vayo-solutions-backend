@@ -48,16 +48,17 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // ── Archivos estáticos (imágenes subidas) ─────────────────────────────────────
-app.use(
+/* app.use(
   '/uploads',
   express.static(
     path.join(process.cwd(), process.env.UPLOAD_PATH || 'uploads')
   )
-);
+); */
 
 
 
 // ── Rutas API ──────────────────────────────────────────────────────────────────
+app.use('/api/upload', uploadRoutes);
 app.use(routes);
 
 // ── 404 genérico ───────────────────────────────────────────────────────────────

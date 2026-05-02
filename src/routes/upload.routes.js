@@ -1,37 +1,37 @@
-import express from 'express';
-import upload from '../middlewares/upload.middleware.js';
-import cloudinary from '../config/cloudinary.js';
-
+const express = require('express');
 const router = express.Router();
 
-router.post('/', upload.single('image'), async (req, res) => {
+const { uploadProductImage } = require('../middlewares/upload.middleware');
+const { verifyToken, requireRole } = require('../middlewares/auth.middleware');
+const { ROLES } = require('../constants/roles');
+const { uploadBuffer } = require('../services/cloudinary.service');
+const { ok, fail, serverError } = require('../utils/response');
+
+// ── POST /api/upload/product ─────────────────────────────────────────────────
+// Sube una imagen a Cloudinary y devuelve la URL + public_id.
+// El cliente luego usa estos valores al crear/actualizar un Producto.
+// Solo ADMIN puede subir.
+router.post(
+  '/product',
+  verifyToken,
+  requireRole(ROLES.ADMIN),
+  (req, res, next) => {
+    uploadProductImage(req, res, (err) => {
+      if (err) return fail(res, err.message, 400);
+      next();
+    });
+  },
+  async (req, res) => {
     try {
-        const file = req.file;
+      if (!req.file) return fail(res, 'No se envió imagen');
 
-        const result = await new Promise((resolve, reject) => {
-            cloudinary.uploader.upload_stream(
-                {
-                    use_filename: true,
-                    unique_filename: false,
-                    overwrite: true,
-                    folder: 'productos',
-                },
-                (error, result) => {
-                    if (error) reject(error);
-                    else resolve(result);
-                }
-            ).end(file.buffer);
-        });
+      const { url, publicId } = await uploadBuffer(req.file.buffer, 'vayo/products');
 
-        res.json({
-            public_id: result.public_id,
-            url: result.secure_url,
-        });
-
+      return ok(res, { url, publicId });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error al subir imagen' });
+      return serverError(res, error);
     }
-});
+  }
+);
 
-export default router;
+module.exports = router;

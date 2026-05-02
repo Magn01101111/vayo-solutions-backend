@@ -91,9 +91,16 @@ const productSchema = new mongoose.Schema(
       required: true,
       default: 'out_of_stock',
     },
+    // URL pública de Cloudinary (lo que se muestra al usuario)
     imageUrl: {
       type: String,
       trim: true,
+    },
+    // public_id de Cloudinary — necesario para borrar el asset cuando se reemplaza
+    imagePublicId: {
+      type: String,
+      trim: true,
+      default: null,
     },
     isActive: {
       type: Boolean,

@@ -8,7 +8,7 @@ const productRoutes = require('./product.routes');
 const clientRoutes  = require('./client.routes');
 const companyRoutes = require('./company.routes');
 const quoteRoutes   = require('./quote.routes');
-
+const uploadRoutes  = require('./upload.routes.js');
 const router = express.Router();
 
 // Públicas
@@ -22,5 +22,7 @@ router.use('/api/products',   productRoutes);
 router.use('/api/clients',    clientRoutes);
 router.use('/api/company',    companyRoutes);
 router.use('/api/quotes',     quoteRoutes);
+
+router.use('/api/upload', uploadRoutes);
 
 module.exports = router;

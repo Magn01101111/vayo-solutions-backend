@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Product = require('../models/product.model');
 const Category = require('../models/category.model');
+const { uploadBuffer, deleteAsset } = require('../services/cloudinary.service');
 const {
   ok,
   created,
@@ -9,10 +10,6 @@ const {
   conflict,
   serverError,
 } = require('../utils/response');
-
-function buildImageUrl(req, filename) {
-  return `${req.protocol}://${req.get('host')}/uploads/products/${filename}`;
-}
 
 function mapProductList(product) {
   return {
@@ -29,6 +26,7 @@ function mapProductList(product) {
     stock: product.stock,
     availabilityStatus: product.availabilityStatus,
     imageUrl: product.imageUrl,
+    imagePublicId: product.imagePublicId,
     isActive: product.isActive,
     tags: product.tags ?? [],
   };
@@ -112,7 +110,7 @@ async function createProduct(req, res) {
     const {
       categoryId, name, sku, description, brand, model,
       price, currency, stock, availabilityStatus,
-      imageUrl, isActive, tags, specs, dimensions,
+      imageUrl, imagePublicId, isActive, tags, specs, dimensions,
       compatibility, documents,
     } = req.body;
 
@@ -125,7 +123,7 @@ async function createProduct(req, res) {
     const product = await Product.create({
       category: categoryId, name, sku, description, brand, model,
       price, currency, stock, availabilityStatus,
-      imageUrl, isActive, tags, specs, dimensions,
+      imageUrl, imagePublicId, isActive, tags, specs, dimensions,
       compatibility, documents,
     });
 
@@ -150,9 +148,16 @@ async function updateProduct(req, res) {
     const product = await Product.findById(req.params.id);
     if (!product) return notFound(res, 'Producto no encontrado');
 
+    // Si la imagen va a cambiar, recordamos el public_id viejo para borrarlo
+    // de Cloudinary después de actualizar el producto.
+    const oldPublicId = product.imagePublicId;
+    const newPublicId = req.body.imagePublicId;
+    const imageChanging =
+      newPublicId !== undefined && newPublicId !== oldPublicId;
+
     const allowed = [
       'name', 'description', 'brand', 'model', 'price',
-      'stock', 'availabilityStatus', 'imageUrl', 'tags',
+      'stock', 'availabilityStatus', 'imageUrl', 'imagePublicId', 'tags',
       'specs', 'dimensions', 'compatibility', 'documents',
     ];
 
@@ -168,6 +173,13 @@ async function updateProduct(req, res) {
     }
 
     await product.save();
+
+    // Si la imagen cambió y había una vieja en Cloudinary, la borramos.
+    // Esto se hace DESPUÉS del save (no en transacción) — la imagen de
+    // Cloudinary es un asset externo, no parte de la integridad transaccional.
+    if (imageChanging && oldPublicId) {
+      deleteAsset(oldPublicId); // fire-and-forget, no bloquear la respuesta
+    }
 
     const populated = await Product.findById(product._id).populate(
       'category',
@@ -202,27 +214,35 @@ async function deactivateProduct(req, res) {
 }
 
 // ── POST /api/products/:id/image ──────────────────────────────────────────────
+// Sube una imagen a Cloudinary, la vincula a un producto existente y borra
+// la imagen anterior del producto (si tenía).
 async function uploadProductImage(req, res) {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return fail(res, 'ID de producto inválido');
     }
-
     if (!req.file) {
       return fail(res, 'No se recibió ningún archivo');
     }
 
-    const imageUrl = buildImageUrl(req, req.file.filename);
-
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { $set: { imageUrl } },
-      { new: true }
-    ).populate('category', 'name slug');
-
+    const product = await Product.findById(req.params.id);
     if (!product) return notFound(res, 'Producto no encontrado');
 
-    return ok(res, { imageUrl: product.imageUrl });
+    // 1. Subir nueva imagen a Cloudinary
+    const { url, publicId } = await uploadBuffer(req.file.buffer, 'vayo/products');
+
+    // 2. Recordar la imagen vieja para limpiarla después
+    const oldPublicId = product.imagePublicId;
+
+    // 3. Actualizar el producto con la nueva URL y public_id
+    product.imageUrl       = url;
+    product.imagePublicId  = publicId;
+    await product.save();
+
+    // 4. Borrar la imagen vieja de Cloudinary (fire-and-forget)
+    if (oldPublicId) deleteAsset(oldPublicId);
+
+    return ok(res, { imageUrl: url, imagePublicId: publicId });
   } catch (error) {
     return serverError(res, error);
   }
