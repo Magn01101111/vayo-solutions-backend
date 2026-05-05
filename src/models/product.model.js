@@ -91,12 +91,32 @@ const productSchema = new mongoose.Schema(
       required: true,
       default: 'out_of_stock',
     },
-    // URL pública de Cloudinary (lo que se muestra al usuario)
+    /**
+     * Galería de imágenes del producto (máx 4).
+     * El elemento [0] es la imagen principal — la que se ve en cards de catálogo.
+     * El resto se muestra en la ficha de detalle del producto.
+     */
+    images: {
+      type: [
+        {
+          _id: false,
+          url: { type: String, required: true, trim: true },
+          publicId: { type: String, trim: true, default: null },
+        },
+      ],
+      default: [],
+      validate: {
+        validator: (arr) => !arr || arr.length <= 4,
+        message: 'Un producto puede tener hasta 4 imágenes',
+      },
+    },
+
+    // ── Campos legacy (mantenidos por compatibilidad con catálogo/home) ──────
+    // Siempre quedan en sync con images[0] vía pre-save hook.
     imageUrl: {
       type: String,
       trim: true,
     },
-    // public_id de Cloudinary — necesario para borrar el asset cuando se reemplaza
     imagePublicId: {
       type: String,
       trim: true,
@@ -132,6 +152,22 @@ const productSchema = new mongoose.Schema(
     versionKey: false,
   }
 );
+
+// ── Hook: mantener imageUrl/imagePublicId sincronizados con images[0] ────────
+// Esto asegura backwards-compatibility: el catálogo y home siguen leyendo
+// imageUrl directamente, sin tener que conocer el array images[].
+productSchema.pre('save', function () {
+  if (Array.isArray(this.images) && this.images.length > 0) {
+    this.imageUrl      = this.images[0].url;
+    this.imagePublicId = this.images[0].publicId ?? null;
+  } else if (this.imageUrl) {
+    // Migración inversa: si vino solo el campo legacy, lo subimos a images[0]
+    this.images = [{ url: this.imageUrl, publicId: this.imagePublicId ?? null }];
+  } else {
+    this.imageUrl      = null;
+    this.imagePublicId = null;
+  }
+});
 
 // Índices para búsqueda optimizada (HU 04-2026-024)
 productSchema.index({ name: 'text', sku: 'text', brand: 'text', model: 'text' });

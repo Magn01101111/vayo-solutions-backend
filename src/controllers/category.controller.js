@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Category = require('../models/category.model');
+const cache = require('../utils/memoryCache');
 const {
   ok,
   created,
@@ -8,6 +9,17 @@ const {
   conflict,
   serverError,
 } = require('../utils/response');
+
+// ── Cache config ──────────────────────────────────────────────────────────────
+const CACHE_TTL_MS    = 5 * 60 * 1000; // 5 minutos
+const CACHE_KEY_ACTIVE = 'categories:active';
+const CACHE_KEY_ALL    = 'categories:all';
+const HTTP_CACHE_HEADER = 'public, max-age=300, stale-while-revalidate=60';
+
+/** Borra todas las claves de cache de categorías. Llamar tras cualquier write. */
+function invalidateCategoryCache() {
+  cache.invalidatePrefix('categories:');
+}
 
 function slugify(text) {
   return text
@@ -33,16 +45,33 @@ function mapCategory(cat) {
 }
 
 // ── GET /api/categories ───────────────────────────────────────────────────────
-// Cotizador y Admin ven solo las activas; Admin puede pedir todas con ?all=true
+// Cotizador y Admin ven solo las activas; Admin puede pedir todas con ?all=true.
+// Cache: las categorías cambian raramente → cacheamos 5 min y mandamos
+// Cache-Control para que también el navegador cachee.
 async function getCategories(req, res) {
   try {
-    const filter =
-      req.query.all === 'true' && req.user?.role === 'ADMIN'
-        ? {}
-        : { isActive: true };
+    const wantsAll = req.query.all === 'true' && req.user?.role === 'ADMIN';
+    const cacheKey = wantsAll ? CACHE_KEY_ALL : CACHE_KEY_ACTIVE;
 
+    // 1. Intentar servir desde memoria
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      res.set('Cache-Control', HTTP_CACHE_HEADER);
+      res.set('X-Cache', 'HIT');
+      return ok(res, cached);
+    }
+
+    // 2. Cache miss → consultar DB
+    const filter = wantsAll ? {} : { isActive: true };
     const categories = await Category.find(filter).sort({ name: 1 });
-    return ok(res, categories.map(mapCategory));
+    const mapped = categories.map(mapCategory);
+
+    // 3. Guardar en cache para siguientes requests
+    cache.set(cacheKey, mapped, CACHE_TTL_MS);
+
+    res.set('Cache-Control', HTTP_CACHE_HEADER);
+    res.set('X-Cache', 'MISS');
+    return ok(res, mapped);
   } catch (error) {
     return serverError(res, error);
   }
@@ -72,6 +101,7 @@ async function createCategory(req, res) {
     if (exists) return conflict(res, 'Ya existe una categoría con ese nombre');
 
     const category = await Category.create({ name, slug, description });
+    invalidateCategoryCache();
     return created(res, mapCategory(category));
   } catch (error) {
     return serverError(res, error);
@@ -101,6 +131,7 @@ async function updateCategory(req, res) {
     if (description !== undefined) category.description = description;
 
     await category.save();
+    invalidateCategoryCache();
     return ok(res, mapCategory(category));
   } catch (error) {
     return serverError(res, error);
@@ -121,6 +152,8 @@ async function deactivateCategory(req, res) {
     );
 
     if (!category) return notFound(res, 'Categoría no encontrada');
+
+    invalidateCategoryCache();
 
     return ok(res, {
       message: 'Categoría desactivada correctamente',

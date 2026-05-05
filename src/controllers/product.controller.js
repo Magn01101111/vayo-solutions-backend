@@ -11,7 +11,22 @@ const {
   serverError,
 } = require('../utils/response');
 
+/**
+ * Devuelve el array de imágenes — para productos viejos sin `images[]`,
+ * lo construye desde el campo legacy `imageUrl` para no romper nada.
+ */
+function resolveImages(product) {
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    return product.images.map((i) => ({ url: i.url, publicId: i.publicId ?? null }));
+  }
+  if (product.imageUrl) {
+    return [{ url: product.imageUrl, publicId: product.imagePublicId ?? null }];
+  }
+  return [];
+}
+
 function mapProductList(product) {
+  const images = resolveImages(product);
   return {
     id: product._id,
     categoryId: product.category._id,
@@ -25,8 +40,9 @@ function mapProductList(product) {
     currency: product.currency,
     stock: product.stock,
     availabilityStatus: product.availabilityStatus,
-    imageUrl: product.imageUrl,
-    imagePublicId: product.imagePublicId,
+    images,                                                  // nueva forma
+    imageUrl: images[0]?.url ?? null,                        // legacy
+    imagePublicId: images[0]?.publicId ?? null,              // legacy
     isActive: product.isActive,
     tags: product.tags ?? [],
   };
@@ -110,7 +126,7 @@ async function createProduct(req, res) {
     const {
       categoryId, name, sku, description, brand, model,
       price, currency, stock, availabilityStatus,
-      imageUrl, imagePublicId, isActive, tags, specs, dimensions,
+      images, imageUrl, imagePublicId, isActive, tags, specs, dimensions,
       compatibility, documents,
     } = req.body;
 
@@ -120,10 +136,13 @@ async function createProduct(req, res) {
     const skuTaken = await Product.findOne({ sku: sku?.toUpperCase() });
     if (skuTaken) return conflict(res, `El SKU '${sku}' ya está en uso`);
 
+    // Si vinieron images[], se usan. Si solo viene imageUrl/imagePublicId
+    // legacy, el pre-save hook del modelo los promueve a images[0].
     const product = await Product.create({
       category: categoryId, name, sku, description, brand, model,
       price, currency, stock, availabilityStatus,
-      imageUrl, imagePublicId, isActive, tags, specs, dimensions,
+      images, imageUrl, imagePublicId,
+      isActive, tags, specs, dimensions,
       compatibility, documents,
     });
 
@@ -148,17 +167,28 @@ async function updateProduct(req, res) {
     const product = await Product.findById(req.params.id);
     if (!product) return notFound(res, 'Producto no encontrado');
 
-    // Si la imagen va a cambiar, recordamos el public_id viejo para borrarlo
-    // de Cloudinary después de actualizar el producto.
-    const oldPublicId = product.imagePublicId;
-    const newPublicId = req.body.imagePublicId;
-    const imageChanging =
-      newPublicId !== undefined && newPublicId !== oldPublicId;
+    // ── Detectar imágenes que ya no estarán → limpiar de Cloudinary ─────────
+    // Estrategia: tomar publicIds viejos, comparar con publicIds nuevos.
+    // Lo que estaba antes y ya no está → se borra (fire-and-forget).
+    const oldPublicIds = (product.images ?? [])
+      .map((img) => img.publicId)
+      .filter(Boolean);
+
+    let newPublicIds = oldPublicIds;
+    if (Array.isArray(req.body.images)) {
+      newPublicIds = req.body.images.map((i) => i.publicId).filter(Boolean);
+    } else if (req.body.imagePublicId !== undefined) {
+      // Modo legacy: solo se setea la imagen principal
+      newPublicIds = req.body.imagePublicId ? [req.body.imagePublicId] : [];
+    }
+
+    const removedPublicIds = oldPublicIds.filter((id) => !newPublicIds.includes(id));
 
     const allowed = [
       'name', 'description', 'brand', 'model', 'price',
-      'stock', 'availabilityStatus', 'imageUrl', 'imagePublicId', 'tags',
-      'specs', 'dimensions', 'compatibility', 'documents',
+      'stock', 'availabilityStatus',
+      'images', 'imageUrl', 'imagePublicId',
+      'tags', 'specs', 'dimensions', 'compatibility', 'documents',
     ];
 
     allowed.forEach((field) => {
@@ -174,12 +204,9 @@ async function updateProduct(req, res) {
 
     await product.save();
 
-    // Si la imagen cambió y había una vieja en Cloudinary, la borramos.
-    // Esto se hace DESPUÉS del save (no en transacción) — la imagen de
-    // Cloudinary es un asset externo, no parte de la integridad transaccional.
-    if (imageChanging && oldPublicId) {
-      deleteAsset(oldPublicId); // fire-and-forget, no bloquear la respuesta
-    }
+    // Limpieza de imágenes que ya no están en el producto.
+    // Fire-and-forget — no bloqueamos la respuesta del usuario.
+    removedPublicIds.forEach((publicId) => deleteAsset(publicId));
 
     const populated = await Product.findById(product._id).populate(
       'category',
