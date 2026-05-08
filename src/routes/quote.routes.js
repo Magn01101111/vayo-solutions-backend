@@ -24,6 +24,7 @@ router.get('/folio/:folio', verifyToken, getQuoteByFolio);
 router.get('/:id', verifyToken, getQuoteById);
 
 // PDF
-router.get('/:id/pdf', verifyToken, downloadQuotePDF);
+router.get('/:id/pdf', optionalAuth, downloadQuotePDF);  // ya no verifyToken
+
 
 module.exports = router;
