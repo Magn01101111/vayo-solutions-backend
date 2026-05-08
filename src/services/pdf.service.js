@@ -2,13 +2,13 @@ const PDFDocument = require('pdfkit');
 
 // ── Tema ──────────────────────────────────────────────────────────────────────
 const COLORS = {
-  brand:     '#0c447c',
+  brand: '#0c447c',
   brandSoft: '#e6f1fb',
-  text:      '#1a1a1a',
-  muted:     '#666666',
-  border:    '#d6d6d6',
-  success:   '#0f6e56',
-  rowAlt:    '#f8f8f7',
+  text: '#1a1a1a',
+  muted: '#666666',
+  border: '#d6d6d6',
+  success: '#0f6e56',
+  rowAlt: '#f8f8f7',
 };
 
 const PAGE_MARGIN = 45;
@@ -24,7 +24,7 @@ const formatCurrency = (value, currency = 'CLP') => {
     }).format(n);
   }
   if (currency === 'USD') return `US$ ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (currency === 'UF')  return `UF ${n.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (currency === 'UF') return `UF ${n.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return String(n);
 };
 
@@ -121,56 +121,83 @@ const drawHeader = (doc, quote) => {
 };
 
 // ── Bloque de cliente y direcciones ───────────────────────────────────────────
+// ── Bloque de cliente y direcciones ───────────────────────────────────────────
 const drawClientBlock = (doc, quote) => {
   const startY = doc.y;
-  const colWidth = (doc.page.width - PAGE_MARGIN * 2 - 20) / 2;
+  const gap = 20;
+  const colWidth = (doc.page.width - PAGE_MARGIN * 2 - gap) / 2;
+  const col1X = PAGE_MARGIN;
+  const col2X = PAGE_MARGIN + colWidth + gap;
 
-  // Columna 1: Cliente
-  doc.save();
-  sectionTitle(doc, 'Cliente');
+  // Helper: imprime una línea en (x, y) con ancho fijo y devuelve la nueva Y.
+  const writeLine = (text, x, y, opts = {}) => {
+    const {
+      font = 'Helvetica',
+      size = 9,
+      color = COLORS.muted,
+      gapAfter = 1,
+    } = opts;
+    doc.font(font).fontSize(size).fillColor(color);
+    doc.text(text, x, y, { width: colWidth, lineBreak: true });
+    return doc.y + gapAfter;
+  };
+
+  const writeTitle = (label, x, y) => {
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.muted);
+    doc.text(label.toUpperCase(), x, y, {
+      width: colWidth,
+      characterSpacing: 1,
+    });
+    return doc.y + 4;
+  };
+
+  // ─ Columna 1: Cliente ────────────────────────────────────────────────────
+  let y1 = startY;
+  y1 = writeTitle('Cliente', col1X, y1);
+
   const c = quote.client || {};
-  doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(10)
-    .text(safe(c.company || c.name), { width: colWidth });
+  y1 = writeLine(safe(c.company || c.name), col1X, y1, {
+    font: 'Helvetica-Bold',
+    size: 10,
+    color: COLORS.text,
+    gapAfter: 2,
+  });
 
-  doc.font('Helvetica').fontSize(9).fillColor(COLORS.muted);
-  if (c.company && c.name) doc.text(`Contacto: ${c.name}`, { width: colWidth });
-  if (c.taxId)            doc.text(`RUT: ${c.taxId}`, { width: colWidth });
-  if (c.email)            doc.text(c.email, { width: colWidth });
-  if (c.phone)            doc.text(c.phone, { width: colWidth });
-  if (c.businessActivity) doc.text(`Giro: ${c.businessActivity}`, { width: colWidth });
-  doc.restore();
+  if (c.company && c.name) y1 = writeLine(`Contacto: ${c.name}`, col1X, y1);
+  if (c.taxId) y1 = writeLine(`RUT: ${c.taxId}`, col1X, y1);
+  if (c.email) y1 = writeLine(c.email, col1X, y1);
+  if (c.phone) y1 = writeLine(c.phone, col1X, y1);
+  if (c.businessActivity) y1 = writeLine(`Giro: ${c.businessActivity}`, col1X, y1);
 
-  const col1End = doc.y;
+  // ─ Columna 2: Direcciones ────────────────────────────────────────────────
+  let y2 = startY;
+  y2 = writeTitle('Dirección de facturación', col2X, y2);
 
-  // Columna 2: Direcciones
-  const col2X = PAGE_MARGIN + colWidth + 20;
-  doc.save();
-  doc.x = col2X;
-  doc.y = startY;
-
-  sectionTitle(doc, 'Dirección de facturación');
   const billingTxt = formatAddress(quote.billingAddress);
-  doc.fillColor(COLORS.text).font('Helvetica').fontSize(9)
-    .text(billingTxt || 'No registrada', { width: colWidth });
+  y2 = writeLine(billingTxt || 'No registrada', col2X, y2, {
+    color: COLORS.text,
+    gapAfter: 6,
+  });
 
   if (quote.shippingAddress && !quote.shippingSameAsBilling) {
     const shipTxt = formatAddress(quote.shippingAddress);
     if (shipTxt) {
-      doc.moveDown(0.5);
-      sectionTitle(doc, 'Dirección de envío');
-      doc.fillColor(COLORS.text).font('Helvetica').fontSize(9)
-        .text(shipTxt, { width: colWidth });
+      y2 = writeTitle('Dirección de envío', col2X, y2);
+      y2 = writeLine(shipTxt, col2X, y2, { color: COLORS.text });
     }
   } else {
-    doc.moveDown(0.3);
-    doc.fillColor(COLORS.muted).font('Helvetica-Oblique').fontSize(8)
-      .text('Envío en la misma dirección de facturación.', { width: colWidth });
+    doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLORS.muted);
+    doc.text('Envío en la misma dirección de facturación.', col2X, y2, {
+      width: colWidth,
+    });
+    y2 = doc.y;
   }
-  doc.restore();
 
-  doc.y = Math.max(col1End, doc.y) + 14;
-  hr(doc, doc.y);
-  doc.y += 12;
+  // Posición Y final = la mayor de ambas columnas + separador
+  const endY = Math.max(y1, y2) + 14;
+  hr(doc, endY);
+  doc.x = PAGE_MARGIN;
+  doc.y = endY + 12;
 };
 
 // ── Tabla de ítems ────────────────────────────────────────────────────────────
@@ -180,11 +207,11 @@ const drawItemsTable = (doc, quote) => {
   const tableWidth = doc.page.width - PAGE_MARGIN * 2;
 
   const cols = {
-    num:  { x: tableX,                  w: 25,  align: 'left'  },
-    prod: { x: tableX + 25,             w: 280, align: 'left'  },
-    qty:  { x: tableX + 305,            w: 40,  align: 'center'},
-    price:{ x: tableX + 345,            w: 80,  align: 'right' },
-    total:{ x: tableX + 425,            w: tableWidth - 425, align: 'right' },
+    num: { x: tableX, w: 25, align: 'left' },
+    prod: { x: tableX + 25, w: 280, align: 'left' },
+    qty: { x: tableX + 305, w: 40, align: 'center' },
+    price: { x: tableX + 345, w: 80, align: 'right' },
+    total: { x: tableX + 425, w: tableWidth - 425, align: 'right' },
   };
 
   const headerY = doc.y;
@@ -289,14 +316,14 @@ const drawTotalsAndTerms = (doc, quote) => {
     ty = doc.y + 2;
   };
 
-  termRow('Pago',     labelPayment(quote.paymentTerms));
-  termRow('Entrega',  labelDelivery(quote.deliveryTerms));
+  termRow('Pago', labelPayment(quote.paymentTerms));
+  termRow('Entrega', labelDelivery(quote.deliveryTerms));
   if (quote.shipping?.methodLabel) {
     const ed = quote.shipping.estimatedDays ? ` (${quote.shipping.estimatedDays})` : '';
     termRow('Envío', `${quote.shipping.methodLabel}${ed}`);
   }
-  termRow('Validez',  `${quote.validityDays || 30} días`);
-  termRow('Moneda',   currency);
+  termRow('Validez', `${quote.validityDays || 30} días`);
+  termRow('Moneda', currency);
   doc.restore();
 
   // ─ Totales (der) ─
