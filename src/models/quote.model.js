@@ -141,36 +141,32 @@ const quoteSchema = new mongoose.Schema(
 // ── Auto-generación de folio ──────────────────────────────────────────────────
 // Formato: Q-YYYY-NNNN (ej. "Q-2026-0001"). Se reinicia el contador por año.
 quoteSchema.pre('validate', async function () {
-  if (this.folio) return; // ya tiene folio (ej. al actualizar)
+  // ── Folio ──
+  if (!this.folio) {
+    const year = new Date().getFullYear();
+    const prefix = `Q-${year}-`;
 
-  const year = new Date().getFullYear();
-  const prefix = `Q-${year}-`;
+    const last = await this.constructor
+      .findOne({ folio: new RegExp(`^${prefix}`) })
+      .sort({ folio: -1 })
+      .select('folio')
+      .lean();
 
-  // Buscar el último folio del año actual
-  const last = await this.constructor
-    .findOne({ folio: new RegExp(`^${prefix}`) })
-    .sort({ folio: -1 })
-    .select('folio')
-    .lean();
-
-  let nextNumber = 1;
-  if (last && last.folio) {
-    const match = last.folio.match(/-(\d+)$/);
-    if (match) nextNumber = parseInt(match[1], 10) + 1;
+    let nextNumber = 1;
+    if (last && last.folio) {
+      const match = last.folio.match(/-(\d+)$/);
+      if (match) nextNumber = parseInt(match[1], 10) + 1;
+    }
+    this.folio = `${prefix}${String(nextNumber).padStart(4, '0')}`;
   }
 
-  this.folio = `${prefix}${String(nextNumber).padStart(4, '0')}`;
-});
-
-// ── Auto-completar validUntil si no viene ─────────────────────────────────────
-quoteSchema.pre('save', function (next) {
+  // ── validUntil por defecto ──
   if (!this.validUntil) {
     const days = this.validityDays || 30;
     const d = new Date();
     d.setDate(d.getDate() + days);
     this.validUntil = d;
   }
-  next();
 });
 
 module.exports = mongoose.model('Quote', quoteSchema);
