@@ -10,6 +10,7 @@ const companyRoutes = require('./company.routes');
 const quoteRoutes   = require('./quote.routes');
 const saleRoutes    = require('./sale.routes');
 const statsRoutes   = require('./stats.routes');
+const reportRoutes  = require('./report.routes');
 const uploadRoutes  = require('./upload.routes.js');
 const router = express.Router();
 
@@ -26,6 +27,7 @@ router.use('/api/company',    companyRoutes);
 router.use('/api/quotes',     quoteRoutes);
 router.use('/api/sales',      saleRoutes);
 router.use('/api/stats',      statsRoutes);
+router.use('/api/reports',    reportRoutes);
 
 router.use('/api/upload', uploadRoutes);
 
