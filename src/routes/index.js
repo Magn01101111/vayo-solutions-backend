@@ -8,6 +8,8 @@ const productRoutes = require('./product.routes');
 const clientRoutes  = require('./client.routes');
 const companyRoutes = require('./company.routes');
 const quoteRoutes   = require('./quote.routes');
+const saleRoutes    = require('./sale.routes');
+const statsRoutes   = require('./stats.routes');
 const uploadRoutes  = require('./upload.routes.js');
 const router = express.Router();
 
@@ -22,6 +24,8 @@ router.use('/api/products',   productRoutes);
 router.use('/api/clients',    clientRoutes);
 router.use('/api/company',    companyRoutes);
 router.use('/api/quotes',     quoteRoutes);
+router.use('/api/sales',      saleRoutes);
+router.use('/api/stats',      statsRoutes);
 
 router.use('/api/upload', uploadRoutes);
 

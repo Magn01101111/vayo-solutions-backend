@@ -44,6 +44,7 @@ function mapProductList(product) {
     imageUrl: images[0]?.url ?? null,                        // legacy
     imagePublicId: images[0]?.publicId ?? null,              // legacy
     isActive: product.isActive,
+    isFeatured: product.isFeatured ?? false,
     tags: product.tags ?? [],
   };
 }
@@ -66,14 +67,19 @@ function mapProductDetail(product) {
 }
 
 // ── GET /api/products ─────────────────────────────────────────────────────────
-// Query: ?category=slug  ?q=texto  ?all=true (solo ADMIN)
+// Query: ?category=slug  ?q=texto  ?all=true (solo ADMIN)  ?featured=true
 async function getProducts(req, res) {
   try {
-    const { category, q, all } = req.query;
+    const { category, q, all, featured } = req.query;
     const isAdmin = req.user?.role === 'ADMIN';
 
     // ADMIN puede ver productos inactivos con ?all=true
     const filter = isAdmin && all === 'true' ? {} : { isActive: true };
+
+    // Solo destacados (para el home de ofertas)
+    if (featured === 'true') {
+      filter.isFeatured = true;
+    }
 
     if (category) {
       const found = await Category.findOne({ slug: category, isActive: true });
@@ -126,7 +132,7 @@ async function createProduct(req, res) {
     const {
       categoryId, name, sku, description, brand, model,
       price, currency, stock, availabilityStatus,
-      images, imageUrl, imagePublicId, isActive, tags, specs, dimensions,
+      images, imageUrl, imagePublicId, isActive, isFeatured, tags, specs, dimensions,
       compatibility, documents,
     } = req.body;
 
@@ -142,7 +148,7 @@ async function createProduct(req, res) {
       category: categoryId, name, sku, description, brand, model,
       price, currency, stock, availabilityStatus,
       images, imageUrl, imagePublicId,
-      isActive, tags, specs, dimensions,
+      isActive, isFeatured, tags, specs, dimensions,
       compatibility, documents,
     });
 
@@ -186,7 +192,7 @@ async function updateProduct(req, res) {
 
     const allowed = [
       'name', 'description', 'brand', 'model', 'price',
-      'stock', 'availabilityStatus',
+      'stock', 'availabilityStatus', 'isActive', 'isFeatured',
       'images', 'imageUrl', 'imagePublicId',
       'tags', 'specs', 'dimensions', 'compatibility', 'documents',
     ];

@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const Quote = require('../models/quote.model');
 const { generateQuotePDF } = require('../services/pdf.service');
+const { sendQuoteEmail } = require('../services/email.service');
 const { ROLES } = require('../constants/roles');
 const {
   ok,
@@ -217,6 +218,33 @@ const getQuoteById = async (req, res) => {
   }
 };
 
+// ── PATCH /api/quotes/:id/status ──────────────────────────────────────────────
+// Cambia el estado de una cotización. Solo ADMIN / COTIZADOR.
+// Body: { status: 'sent' | 'accepted' | 'rejected' | 'expired' }
+const updateQuoteStatus = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return fail(res, 'ID de cotización inválido');
+    }
+    const { status } = req.body || {};
+    const allowed = ['sent', 'accepted', 'rejected', 'expired'];
+    if (!allowed.includes(status)) {
+      return fail(res, `Estado inválido. Use: ${allowed.join(', ')}`);
+    }
+
+    const quote = await Quote.findById(req.params.id);
+    if (!quote) return notFound(res, 'Cotización no encontrada');
+
+    quote.metadata = quote.metadata || {};
+    quote.metadata.status = status;
+    await quote.save();
+
+    return ok(res, quote);
+  } catch (error) {
+    return serverError(res, error);
+  }
+};
+
 // ── POST /api/quotes ──────────────────────────────────────────────────────────
 const createQuote = async (req, res) => {
   try {
@@ -269,10 +297,51 @@ const downloadQuotePDF = async (req, res) => {
   }
 };
 
+// ── POST /api/quotes/:id/send-email ───────────────────────────────────────────
+// Genera el PDF y lo envía por correo. Body opcional: { to: 'email@dest' }.
+// Si no se especifica `to`, usa el email del cliente de la cotización.
+const sendQuoteByEmail = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return fail(res, 'ID de cotización inválido');
+    }
+
+    const quote = await Quote.findById(req.params.id);
+    if (!quote) return notFound(res, 'Cotización no encontrada');
+
+    const to = (req.body?.to || quote.client?.email || '').trim();
+    if (!to) {
+      return fail(res, 'No hay email de destino. La cotización no tiene email de cliente.');
+    }
+
+    const pdfBuffer = await generateQuotePDF(quote);
+
+    const result = await sendQuoteEmail({
+      to,
+      folio: quote.folio,
+      clientName: quote.client?.name,
+      pdfBuffer,
+      total: quote.totals?.total,
+    });
+
+    if (result.simulated) {
+      return ok(res, {
+        message: `Email simulado a ${to} (SMTP no configurado en el servidor).`,
+        simulated: true,
+      });
+    }
+    return ok(res, { message: `Cotización enviada a ${to}.` });
+  } catch (error) {
+    return serverError(res, error);
+  }
+};
+
 module.exports = {
   createQuote,
   getQuotes,
   getQuoteById,
   getQuoteByFolio,
+  updateQuoteStatus,
+  sendQuoteByEmail,
   downloadQuotePDF,
 };

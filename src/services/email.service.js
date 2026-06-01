@@ -62,4 +62,51 @@ async function sendPasswordResetEmail(to, resetUrl) {
   });
 }
 
-module.exports = { sendPasswordResetEmail };
+/**
+ * Envía una cotización por correo, con el PDF adjunto.
+ * @param {object} opts
+ * @param {string} opts.to          email destino
+ * @param {string} opts.folio       folio de la cotización (ej. Q-2026-0001)
+ * @param {string} opts.clientName  nombre del cliente (para el saludo)
+ * @param {Buffer} opts.pdfBuffer   PDF generado de la cotización
+ * @param {number} [opts.total]     total para mostrar en el cuerpo
+ */
+async function sendQuoteEmail({ to, folio, clientName, pdfBuffer, total }) {
+  const transport = getTransporter();
+  if (!transport) {
+    console.log(`[email.service] (simulado) Cotización ${folio} para ${to}`);
+    return { simulated: true };
+  }
+
+  const from = process.env.SMTP_FROM || 'noreply@vayo.cl';
+  const totalTxt =
+    typeof total === 'number'
+      ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(total)
+      : '';
+
+  await transport.sendMail({
+    from,
+    to,
+    subject: `Tu cotización ${folio} - VAYO Solutions`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #1a1a1a;">
+        <h2 style="color: #0c447c;">VAYO Solutions</h2>
+        <p>Hola${clientName ? ' ' + clientName : ''},</p>
+        <p>Adjuntamos tu cotización <strong>${folio}</strong>.</p>
+        ${totalTxt ? `<p>Total: <strong>${totalTxt}</strong></p>` : ''}
+        <p>El documento PDF se encuentra adjunto a este correo. Si tienes
+        preguntas, responde directamente a este mensaje.</p>
+        <p style="color: #666; font-size: 13px; margin-top: 24px;">
+          Gracias por preferir VAYO Solutions.
+        </p>
+      </div>
+    `,
+    attachments: pdfBuffer
+      ? [{ filename: `${folio}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
+      : [],
+  });
+
+  return { sent: true };
+}
+
+module.exports = { sendPasswordResetEmail, sendQuoteEmail };

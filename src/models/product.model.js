@@ -126,6 +126,14 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Producto destacado: aparece en la portada/home de ofertas.
+    // El admin lo marca manualmente. Campo opcional (default false), por lo que
+    // los productos existentes NO requieren migración.
+    isFeatured: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     tags: {
       type: [String],
       default: [],

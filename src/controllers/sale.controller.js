@@ -1,0 +1,160 @@
+const mongoose = require('mongoose');
+const Sale = require('../models/sale.model');
+const Quote = require('../models/quote.model');
+const { ROLES } = require('../constants/roles');
+const {
+  ok,
+  created,
+  fail,
+  notFound,
+  conflict,
+  serverError,
+} = require('../utils/response');
+
+function mapSale(sale) {
+  return {
+    id: sale._id,
+    folio: sale.folio,
+    quoteId: sale.quoteId,
+    quoteFolio: sale.quoteFolio,
+    clientId: sale.clientId,
+    client: sale.client,
+    items: sale.items ?? [],
+    totals: sale.totals ?? {},
+    currency: sale.currency,
+    paymentMethod: sale.paymentMethod,
+    status: sale.status,
+    notes: sale.notes,
+    createdAt: sale.createdAt,
+    updatedAt: sale.updatedAt,
+  };
+}
+
+// ── GET /api/sales ─────────────────────────────────────────────────────────────
+// Query: ?folio=  ?status=  ?clientId=
+async function getSales(req, res) {
+  try {
+    const filter = {};
+    if (req.query.folio) filter.folio = req.query.folio.toUpperCase().trim();
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.clientId && mongoose.Types.ObjectId.isValid(req.query.clientId)) {
+      filter.clientId = req.query.clientId;
+    }
+
+    const sales = await Sale.find(filter).sort({ createdAt: -1 });
+    return ok(res, sales.map(mapSale));
+  } catch (error) {
+    return serverError(res, error);
+  }
+}
+
+// ── GET /api/sales/:id ─────────────────────────────────────────────────────────
+async function getSaleById(req, res) {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return fail(res, 'ID de venta inválido');
+    }
+    const sale = await Sale.findById(req.params.id);
+    if (!sale) return notFound(res, 'Venta no encontrada');
+    return ok(res, mapSale(sale));
+  } catch (error) {
+    return serverError(res, error);
+  }
+}
+
+// ── POST /api/sales/from-quote/:quoteId ───────────────────────────────────────
+// Convierte una cotización en venta. Toma un snapshot de la cotización.
+async function createSaleFromQuote(req, res) {
+  try {
+    const { quoteId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(quoteId)) {
+      return fail(res, 'ID de cotización inválido');
+    }
+
+    const quote = await Quote.findById(quoteId);
+    if (!quote) return notFound(res, 'Cotización no encontrada');
+
+    // No permitir convertir dos veces la misma cotización
+    const existing = await Sale.findOne({ quoteId });
+    if (existing) {
+      return conflict(res, `Esta cotización ya fue convertida en la venta ${existing.folio}`);
+    }
+
+    const { paymentMethod, notes } = req.body || {};
+
+    const sale = await Sale.create({
+      quoteId: quote._id,
+      quoteFolio: quote.folio,
+      clientId: quote.clientId ?? null,
+      client: {
+        name: quote.client?.name ?? '',
+        email: quote.client?.email ?? '',
+        phone: quote.client?.phone ?? '',
+        company: quote.client?.company ?? '',
+        taxId: quote.client?.taxId ?? '',
+      },
+      items: (quote.items ?? []).map((it) => ({
+        productId: it.productId,
+        name: it.name,
+        sku: it.sku ?? '',
+        price: it.price ?? 0,
+        quantity: it.quantity ?? 1,
+        total: it.total ?? 0,
+      })),
+      totals: {
+        subtotal: quote.totals?.subtotal ?? 0,
+        discount: quote.totals?.discount ?? 0,
+        iva: quote.totals?.iva ?? 0,
+        shipping: quote.totals?.shipping ?? 0,
+        total: quote.totals?.total ?? 0,
+      },
+      currency: quote.currency ?? 'CLP',
+      paymentMethod: paymentMethod || 'transfer',
+      status: 'pending',
+      createdBy: req.user?.id ?? null,
+      notes: notes || '',
+    });
+
+    // Marcar la cotización como aceptada (quedó cerrada en venta)
+    quote.metadata = quote.metadata || {};
+    quote.metadata.status = 'accepted';
+    await quote.save();
+
+    return created(res, mapSale(sale));
+  } catch (error) {
+    return serverError(res, error);
+  }
+}
+
+// ── PATCH /api/sales/:id/status ───────────────────────────────────────────────
+// Body: { status: 'pending' | 'paid' | 'cancelled' }
+async function updateSaleStatus(req, res) {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return fail(res, 'ID de venta inválido');
+    }
+    const { status } = req.body || {};
+    const allowed = ['pending', 'paid', 'cancelled'];
+    if (!allowed.includes(status)) {
+      return fail(res, `Estado inválido. Use: ${allowed.join(', ')}`);
+    }
+
+    const sale = await Sale.findByIdAndUpdate(
+      req.params.id,
+      { $set: { status } },
+      { new: true }
+    );
+    if (!sale) return notFound(res, 'Venta no encontrada');
+
+    return ok(res, mapSale(sale));
+  } catch (error) {
+    return serverError(res, error);
+  }
+}
+
+module.exports = {
+  getSales,
+  getSaleById,
+  createSaleFromQuote,
+  updateSaleStatus,
+};

@@ -4,9 +4,12 @@ const {
   getQuotes,
   getQuoteById,
   getQuoteByFolio,
+  updateQuoteStatus,
+  sendQuoteByEmail,
   downloadQuotePDF,
 } = require('../controllers/quote.controller');
-const { verifyToken, optionalAuth } = require('../middlewares/auth.middleware');
+const { verifyToken, optionalAuth, requireRole } = require('../middlewares/auth.middleware');
+const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
 
@@ -23,8 +26,18 @@ router.get('/folio/:folio', verifyToken, getQuoteByFolio);
 // Detalle por ID
 router.get('/:id', verifyToken, getQuoteById);
 
-// PDF
-router.get('/:id/pdf', optionalAuth, downloadQuotePDF);  // ya no verifyToken
+// Cambiar estado — solo ADMIN / COTIZADOR
+router.patch(
+  '/:id/status',
+  verifyToken,
+  requireRole(ROLES.ADMIN, ROLES.COTIZADOR),
+  updateQuoteStatus
+);
 
+// Enviar por email (con PDF adjunto) — usuario autenticado
+router.post('/:id/send-email', verifyToken, sendQuoteByEmail);
+
+// PDF
+router.get('/:id/pdf', optionalAuth, downloadQuotePDF);
 
 module.exports = router;
