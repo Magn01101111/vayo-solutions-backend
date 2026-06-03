@@ -49,6 +49,26 @@ function mapProductList(product) {
   };
 }
 
+/**
+ * Mapea los suppliers asignados. Si `supplier` viene populado, expone su info;
+ * si no, solo el id. Maneja proveedores eliminados (populate devuelve null).
+ */
+function mapSuppliers(product) {
+  return (product.suppliers ?? [])
+    .filter((s) => s && s.supplier) // descarta refs rotas
+    .map((s) => {
+      const sup = s.supplier;
+      const populated = sup && typeof sup === 'object' && sup.name;
+      return {
+        id: populated ? sup._id : sup,
+        name: populated ? sup.name : undefined,
+        location: populated ? sup.location : undefined,
+        deliveryTime: s.deliveryTime || '',
+        speed: s.speed || 'mid',
+      };
+    });
+}
+
 function mapProductDetail(product) {
   return {
     ...mapProductList(product),
@@ -61,6 +81,7 @@ function mapProductDetail(product) {
     dimensions: product.dimensions ?? {},
     compatibility: product.compatibility ?? [],
     documents: product.documents ?? [],
+    suppliers: mapSuppliers(product),
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -113,10 +134,9 @@ async function getProductById(req, res) {
       return fail(res, 'ID de producto inválido');
     }
 
-    const product = await Product.findById(req.params.id).populate(
-      'category',
-      'name slug'
-    );
+    const product = await Product.findById(req.params.id)
+      .populate('category', 'name slug')
+      .populate('suppliers.supplier', 'name location');
 
     if (!product) return notFound(res, 'Producto no encontrado');
 
@@ -133,7 +153,7 @@ async function createProduct(req, res) {
       categoryId, name, sku, description, brand, model,
       price, currency, stock, availabilityStatus,
       images, imageUrl, imagePublicId, isActive, isFeatured, tags, specs, dimensions,
-      compatibility, documents,
+      compatibility, documents, suppliers,
     } = req.body;
 
     const category = await Category.findById(categoryId);
@@ -149,13 +169,12 @@ async function createProduct(req, res) {
       price, currency, stock, availabilityStatus,
       images, imageUrl, imagePublicId,
       isActive, isFeatured, tags, specs, dimensions,
-      compatibility, documents,
+      compatibility, documents, suppliers,
     });
 
-    const populated = await Product.findById(product._id).populate(
-      'category',
-      'name slug'
-    );
+    const populated = await Product.findById(product._id)
+      .populate('category', 'name slug')
+      .populate('suppliers.supplier', 'name location');
 
     return created(res, mapProductDetail(populated));
   } catch (error) {
@@ -194,7 +213,7 @@ async function updateProduct(req, res) {
       'name', 'description', 'brand', 'model', 'price',
       'stock', 'availabilityStatus', 'isActive', 'isFeatured',
       'images', 'imageUrl', 'imagePublicId',
-      'tags', 'specs', 'dimensions', 'compatibility', 'documents',
+      'tags', 'specs', 'dimensions', 'compatibility', 'documents', 'suppliers',
     ];
 
     allowed.forEach((field) => {
@@ -214,10 +233,9 @@ async function updateProduct(req, res) {
     // Fire-and-forget — no bloqueamos la respuesta del usuario.
     removedPublicIds.forEach((publicId) => deleteAsset(publicId));
 
-    const populated = await Product.findById(product._id).populate(
-      'category',
-      'name slug'
-    );
+    const populated = await Product.findById(product._id)
+      .populate('category', 'name slug')
+      .populate('suppliers.supplier', 'name location');
 
     return ok(res, mapProductDetail(populated));
   } catch (error) {

@@ -154,6 +154,23 @@ const productSchema = new mongoose.Schema(
       type: [productDocumentSchema],
       default: [],
     },
+
+    /**
+     * Proveedores asignados a este producto, cada uno con su tiempo de entrega.
+     * Referencia al Supplier global + datos específicos de entrega para ESTE
+     * producto (un mismo proveedor puede tardar distinto según el repuesto).
+     */
+    suppliers: {
+      type: [
+        {
+          _id: false,
+          supplier: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier', required: true },
+          deliveryTime: { type: String, default: '' }, // ej. "2-3 días"
+          speed: { type: String, enum: ['fast', 'mid', 'slow'], default: 'mid' },
+        },
+      ],
+      default: [],
+    },
   },
   {
     timestamps: true,

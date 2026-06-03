@@ -21,6 +21,7 @@
     "seed": "node src/seeds/seed.js",
     "seed:categories": "node src/seeds/seed-categories.js",
     "seed:demo": "node src/seeds/seed-demo.js",
+    "seed:supreviews": "node src/seeds/seed-suppliers-reviews.js",
     "backup": "node src/scripts/backup.js",
     "restore": "node src/scripts/restore.js"
   },
