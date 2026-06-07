@@ -11,10 +11,14 @@ const {
 } = require('../utils/response');
 
 // ── Cache config ──────────────────────────────────────────────────────────────
-const CACHE_TTL_MS    = 5 * 60 * 1000; // 5 minutos
+// TTL corto en memoria del servidor. La invalidación explícita en cada write
+// mantiene los datos frescos; el TTL es solo un tope de seguridad.
+const CACHE_TTL_MS    = 30 * 1000; // 30 segundos
 const CACHE_KEY_ACTIVE = 'categories:active';
 const CACHE_KEY_ALL    = 'categories:all';
-const HTTP_CACHE_HEADER = 'public, max-age=300, stale-while-revalidate=60';
+// NO usar max-age alto: el navegador cachearía el GET y no reflejaría cambios.
+// `no-cache` obliga a revalidar siempre (el cache real lo maneja el servidor).
+const HTTP_CACHE_HEADER = 'no-cache';
 
 /** Borra todas las claves de cache de categorías. Llamar tras cualquier write. */
 function invalidateCategoryCache() {
@@ -129,6 +133,8 @@ async function updateCategory(req, res) {
     }
 
     if (description !== undefined) category.description = description;
+    // Permite reactivar (o desactivar) la categoría desde el update.
+    if (req.body.isActive !== undefined) category.isActive = req.body.isActive;
 
     await category.save();
     invalidateCategoryCache();

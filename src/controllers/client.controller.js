@@ -146,7 +146,7 @@ async function updateClient(req, res) {
       return fail(res, 'ID de cliente inválido');
     }
 
-    const allowed = ['name', 'company', 'rut', 'email', 'phone', 'address', 'notes'];
+    const allowed = ['name', 'company', 'rut', 'email', 'phone', 'address', 'notes', 'isActive'];
     const updates = {};
     allowed.forEach((f) => {
       if (req.body[f] !== undefined) updates[f] = req.body[f];
@@ -191,6 +191,14 @@ async function updateClient(req, res) {
       .populate('userId', 'email isActive');
 
     if (!client) return notFound(res, 'Cliente no encontrado');
+
+    // Cascada: si se reactiva el cliente y tiene cuenta de portal, reactivarla.
+    if (updates.isActive === true && client.userId) {
+      await User.updateOne(
+        { _id: client.userId._id ?? client.userId },
+        { $set: { isActive: true } }
+      );
+    }
 
     return ok(res, mapClient(client));
   } catch (error) {
