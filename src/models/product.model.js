@@ -74,6 +74,26 @@ const productSchema = new mongoose.Schema(
       default: null,
       min: 0,
     },
+    /**
+     * Precio de oferta (rebajado). Si está presente y es menor al precio normal,
+     * el producto está "en oferta": se muestra con precio tachado y badge de %.
+     * null = sin oferta.
+     */
+    offerPrice: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    /** Inicio de la vigencia de la oferta (opcional). */
+    offerStartsAt: {
+      type: Date,
+      default: null,
+    },
+    /** Término de la vigencia de la oferta (opcional). */
+    offerEndsAt: {
+      type: Date,
+      default: null,
+    },
     currency: {
       type: String,
       enum: ['CLP'],

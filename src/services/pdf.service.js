@@ -353,7 +353,8 @@ const drawTotalsAndTerms = (doc, quote) => {
     lineRow(`Descuento${code}`, `− ${formatCurrency(totals.discount, currency)}`, { color: COLORS.success });
   }
 
-  lineRow('IVA (19%)', formatCurrency(totals.iva, currency));
+  const ivaPercent = totals.ivaPercent ?? 19;
+  lineRow(`IVA (${ivaPercent}%)`, formatCurrency(totals.iva, currency));
 
   const shipCost = totals.shipping ?? quote.shipping?.cost ?? 0;
   lineRow('Envío', shipCost > 0 ? formatCurrency(shipCost, currency) : 'Sin costo');

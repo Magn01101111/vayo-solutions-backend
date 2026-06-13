@@ -149,4 +149,34 @@ async function reportClients(req, res) {
   }
 }
 
-module.exports = { reportSales, reportQuotes, reportClients };
+// ── GET /api/reports/products-most-quoted ───────────────────────────────────────
+async function reportMostQuotedProducts(req, res) {
+  try {
+    const dateFilter = dateRangeFilter(req.query);
+
+    const pipeline = [
+      { $match: dateFilter },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$items.productId',
+          name: { $first: '$items.name' },
+          sku: { $first: '$items.sku' },
+          totalQuoted: { $sum: '$items.quantity' },
+          totalAmount: { $sum: '$items.total' },
+          quoteCount: { $sum: 1 },
+        },
+      },
+      { $sort: { totalQuoted: -1 } },
+      { $limit: 50 },
+    ];
+
+    const rows = await Quote.aggregate(pipeline);
+
+    return ok(res, { count: rows.length, rows });
+  } catch (error) {
+    return serverError(res, error);
+  }
+}
+
+module.exports = { reportSales, reportQuotes, reportClients, reportMostQuotedProducts };

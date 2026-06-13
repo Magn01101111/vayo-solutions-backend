@@ -3,3 +3,6 @@ node_modules/
 backups/
 uploads/
 *.log
+
+# Contexto/memoria del equipo de IA (no se sube a git — ver vayo-context/00_REGLAS_IA.md)
+vayo-context/

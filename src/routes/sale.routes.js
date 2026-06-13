@@ -10,9 +10,9 @@ const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
 
-// Lectura: ADMIN y COTIZADOR
-router.get('/', verifyToken, requireRole(ROLES.ADMIN, ROLES.COTIZADOR), getSales);
-router.get('/:id', verifyToken, requireRole(ROLES.ADMIN, ROLES.COTIZADOR), getSaleById);
+// Lectura: cualquier rol autenticado (CLIENTE ve solo lo suyo vía controller)
+router.get('/', verifyToken, getSales);
+router.get('/:id', verifyToken, getSaleById);
 
 // Conversión cotización → venta: ADMIN y COTIZADOR
 router.post(

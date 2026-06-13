@@ -13,6 +13,9 @@ const statsRoutes   = require('./stats.routes');
 const reportRoutes  = require('./report.routes');
 const supplierRoutes = require('./supplier.routes');
 const reviewRoutes  = require('./review.routes');
+const couponRoutes  = require('./coupon.routes');
+const bannerRoutes  = require('./banner.routes');
+const favoriteRoutes = require('./favorite.routes');
 const uploadRoutes  = require('./upload.routes.js');
 const router = express.Router();
 
@@ -32,6 +35,9 @@ router.use('/api/stats',      statsRoutes);
 router.use('/api/reports',    reportRoutes);
 router.use('/api/suppliers',  supplierRoutes);
 router.use('/api/reviews',    reviewRoutes);
+router.use('/api/coupons',    couponRoutes);
+router.use('/api/banners',    bannerRoutes);
+router.use('/api/favorites',  favoriteRoutes);
 
 router.use('/api/upload', uploadRoutes);
 

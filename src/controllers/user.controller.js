@@ -98,6 +98,8 @@ async function updateCotizador(req, res) {
     if (name)     user.name     = name;
     if (phone)    user.phone    = phone;
     if (position) user.position = position;
+    // Permite reactivar (o desactivar) el usuario desde el update.
+    if (req.body.isActive !== undefined) user.isActive = req.body.isActive;
 
     await user.save();
     return ok(res, mapUser(user));
@@ -165,6 +167,8 @@ async function updateProveedor(req, res) {
     if (name)     user.name     = name;
     if (phone)    user.phone    = phone;
     if (position) user.position = position;
+    // Permite reactivar (o desactivar) el usuario desde el update.
+    if (req.body.isActive !== undefined) user.isActive = req.body.isActive;
 
     await user.save();
     return ok(res, mapUser(user));

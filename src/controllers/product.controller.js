@@ -37,6 +37,9 @@ function mapProductList(product) {
     brand: product.brand,
     model: product.model,
     price: product.price,
+    offerPrice: product.offerPrice ?? null,
+    offerStartsAt: product.offerStartsAt ?? null,
+    offerEndsAt: product.offerEndsAt ?? null,
     currency: product.currency,
     stock: product.stock,
     availabilityStatus: product.availabilityStatus,
@@ -89,17 +92,36 @@ function mapProductDetail(product) {
 
 // ── GET /api/products ─────────────────────────────────────────────────────────
 // Query: ?category=slug  ?q=texto  ?all=true (solo ADMIN)  ?featured=true
+//        ?onOffer=true  ?page=1&limit=12 (paginación)
 async function getProducts(req, res) {
   try {
-    const { category, q, all, featured } = req.query;
+    const { category, q, all, featured, onOffer } = req.query;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const usePagination = req.query.page != null;
     const isAdmin = req.user?.role === 'ADMIN';
 
     // ADMIN puede ver productos inactivos con ?all=true
     const filter = isAdmin && all === 'true' ? {} : { isActive: true };
 
-    // Solo destacados (para el home de ofertas)
+    // Solo destacados (para el home)
     if (featured === 'true') {
       filter.isFeatured = true;
+    }
+
+    // Solo productos en oferta vigente: offerPrice definido, menor al precio normal,
+    // y dentro del rango de fechas si están definidas.
+    if (onOffer === 'true') {
+      const now = new Date();
+      filter.$expr = {
+        $and: [
+          { $ne: ['$offerPrice', null] },
+          { $gt: ['$offerPrice', 0] },
+          { $lt: ['$offerPrice', '$price'] },
+          { $or: [{ $eq: ['$offerStartsAt', null] }, { $lte: ['$offerStartsAt', now] }] },
+          { $or: [{ $eq: ['$offerEndsAt', null] }, { $gte: ['$offerEndsAt', now] }] },
+        ],
+      };
     }
 
     if (category) {
@@ -115,6 +137,25 @@ async function getProducts(req, res) {
         { brand: { $regex: q, $options: 'i' } },
         { model: { $regex: q, $options: 'i' } },
       ];
+    }
+
+    if (usePagination) {
+      const [products, total] = await Promise.all([
+        Product.find(filter)
+          .populate('category', 'name slug')
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit),
+        Product.countDocuments(filter),
+      ]);
+
+      return ok(res, {
+        products: products.map(mapProductList),
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      });
     }
 
     const products = await Product.find(filter)
@@ -151,7 +192,7 @@ async function createProduct(req, res) {
   try {
     const {
       categoryId, name, sku, description, brand, model,
-      price, currency, stock, availabilityStatus,
+      price, offerPrice, offerStartsAt, offerEndsAt, currency, stock, availabilityStatus,
       images, imageUrl, imagePublicId, isActive, isFeatured, tags, specs, dimensions,
       compatibility, documents, suppliers,
     } = req.body;
@@ -166,7 +207,7 @@ async function createProduct(req, res) {
     // legacy, el pre-save hook del modelo los promueve a images[0].
     const product = await Product.create({
       category: categoryId, name, sku, description, brand, model,
-      price, currency, stock, availabilityStatus,
+      price, offerPrice, offerStartsAt, offerEndsAt, currency, stock, availabilityStatus,
       images, imageUrl, imagePublicId,
       isActive, isFeatured, tags, specs, dimensions,
       compatibility, documents, suppliers,
@@ -210,7 +251,8 @@ async function updateProduct(req, res) {
     const removedPublicIds = oldPublicIds.filter((id) => !newPublicIds.includes(id));
 
     const allowed = [
-      'name', 'description', 'brand', 'model', 'price',
+      'name', 'description', 'brand', 'model', 'price', 'offerPrice',
+      'offerStartsAt', 'offerEndsAt',
       'stock', 'availabilityStatus', 'isActive', 'isFeatured',
       'images', 'imageUrl', 'imagePublicId',
       'tags', 'specs', 'dimensions', 'compatibility', 'documents', 'suppliers',
@@ -306,4 +348,5 @@ module.exports = {
   updateProduct,
   deactivateProduct,
   uploadProductImage,
+  mapProductList, // reutilizado por favorite.controller
 };

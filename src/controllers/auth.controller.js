@@ -72,13 +72,18 @@ async function register(req, res) {
       return fail(res, 'Teléfono inválido. Debe ser un móvil chileno (8 dígitos tras el 9).');
     }
 
-    // ── Verificar email y RUT únicos (antes de abrir la transacción) ──────────
-    const [existsEmail, existsRut] = await Promise.all([
-      User.findOne({ email }),
-      Client.findOne({ rut: canonicalRut }),
-    ]);
+    // ── Verificar email único ─────────────────────────────────────────────────
+    const existsEmail = await User.findOne({ email });
     if (existsEmail) return conflict(res, 'El correo ya está registrado');
-    if (existsRut)   return conflict(res, 'El RUT ya está registrado');
+
+    // ── Buscar Client existente por RUT ───────────────────────────────────────
+    // Puede existir si el usuario ya compró como invitado. En ese caso:
+    //   - Si NO tiene cuenta de portal → la vinculamos (escenario post-compra).
+    //   - Si YA tiene cuenta de portal → rechazamos (RUT con usuario activo).
+    const existingClient = await Client.findOne({ rut: canonicalRut });
+    if (existingClient && existingClient.userId) {
+      return conflict(res, 'El RUT ya tiene una cuenta asociada. Inicia sesión.');
+    }
 
     let user, client;
 
@@ -95,25 +100,34 @@ async function register(req, res) {
         { session }
       );
 
-      // 2. Crear el Client CRM vinculado al user recién creado
-      const [createdClient] = await Client.create(
-        [{
-          name,
-          email,
-          phone: canonicalPhone,
-          rut: canonicalRut,
-          userId: createdUser._id,
-          createdBy: null, // se auto-registró, no lo creó un cotizador
-        }],
-        { session }
-      );
+      if (existingClient) {
+        // 2a. Reutilizar el Client de invitado: vincularlo a la nueva cuenta.
+        existingClient.userId = createdUser._id;
+        if (!existingClient.email) existingClient.email = email;
+        if (!existingClient.phone) existingClient.phone = canonicalPhone;
+        await existingClient.save({ session });
+        client = existingClient;
+      } else {
+        // 2b. Crear un Client CRM nuevo vinculado al user.
+        const [createdClient] = await Client.create(
+          [{
+            name,
+            email,
+            phone: canonicalPhone,
+            rut: canonicalRut,
+            userId: createdUser._id,
+            createdBy: null, // se auto-registró, no lo creó un cotizador
+          }],
+          { session }
+        );
+        client = createdClient;
+      }
 
       // 3. Vincular el User al Client
-      createdUser.clientId = createdClient._id;
+      createdUser.clientId = client._id;
       await createdUser.save({ session });
 
       user = createdUser;
-      client = createdClient;
     });
 
     const token = generateToken(user);
@@ -158,7 +172,13 @@ async function login(req, res) {
 
     if (!valid) {
       await user.incrementLoginAttempts();
-      return unauthorized(res, 'Credenciales inválidas');
+      const maxAttempts = Number(process.env.MAX_LOGIN_ATTEMPTS) || 5;
+      const left = Math.max(0, maxAttempts - user.loginAttempts);
+      return res.status(401).json({
+        ok: false,
+        error: 'Credenciales inválidas',
+        attemptsLeft: left,
+      });
     }
 
     // Restablecer intentos fallidos

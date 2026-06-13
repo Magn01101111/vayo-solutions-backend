@@ -70,6 +70,14 @@ async function getClients(req, res) {
       filter.$or = [{ name: re }, { company: re }, { rut: re }, { email: re }];
     }
 
+    // Filtro "mi cartera" para roles internos
+    if (
+      req.user?.role !== ROLES.CLIENTE &&
+      req.query.mine === 'true'
+    ) {
+      filter.createdBy = req.user.id;
+    }
+
     const clients = await Client.find(filter)
       .populate('createdBy', 'name email')
       .populate('userId', 'email isActive')

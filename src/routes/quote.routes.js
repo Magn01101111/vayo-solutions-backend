@@ -26,13 +26,8 @@ router.get('/folio/:folio', verifyToken, getQuoteByFolio);
 // Detalle por ID
 router.get('/:id', verifyToken, getQuoteById);
 
-// Cambiar estado — solo ADMIN / COTIZADOR
-router.patch(
-  '/:id/status',
-  verifyToken,
-  requireRole(ROLES.ADMIN, ROLES.COTIZADOR),
-  updateQuoteStatus
-);
+// Cambiar estado — control de roles en el controller
+router.patch('/:id/status', verifyToken, updateQuoteStatus);
 
 // Enviar por email (con PDF adjunto) — usuario autenticado
 router.post('/:id/send-email', verifyToken, sendQuoteByEmail);

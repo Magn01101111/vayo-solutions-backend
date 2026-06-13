@@ -26,13 +26,13 @@ const Client   = require('../models/client.model');
 const Quote    = require('../models/quote.model');
 const Sale     = require('../models/sale.model');
 const { ROLES } = require('../constants/roles');
+const Company   = require('../models/company.model');
 
 // ── Parámetros ───────────────────────────────────────────────────────────────
 const N_CLIENTS = 40;
 const N_QUOTES  = 130;
 const N_SALES   = 100;
 const MONTHS_BACK = 6;
-const IVA_RATE  = 0.19;
 
 // ── Datos base para generar nombres realistas ─────────────────────────────────
 const FIRST_NAMES = ['Juan', 'María', 'Pedro', 'Camila', 'Diego', 'Valentina', 'José', 'Francisca', 'Andrés', 'Catalina', 'Felipe', 'Antonia', 'Sebastián', 'Javiera', 'Matías', 'Constanza', 'Cristóbal', 'Fernanda', 'Ignacio', 'Daniela'];
@@ -83,6 +83,9 @@ async function seedDemo() {
 
   await mongoose.connect(uri);
   console.log('✅ Conectado a MongoDB\n');
+
+  const company = await Company.findOne().lean();
+  const IVA_RATE = (company?.ivaPercent ?? 19) / 100;
 
   // Productos y categorías existentes (necesarios para los ítems)
   const products = await Product.find({ isActive: true }).lean();

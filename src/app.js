@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const routes = require('./routes');
 
 const app = express();
@@ -14,6 +15,35 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
+
+// ── Rate limiting ───────────────────────────────────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Demasiadas solicitudes. Intenta de nuevo más tarde.' },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Demasiados intentos de autenticación. Espera un minuto.' },
+});
+
+const quoteLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, error: 'Demasiadas cotizaciones. Espera un minuto.' },
+});
+
+app.use(globalLimiter);
+app.use('/api/auth', authLimiter);
+app.use('/api/quotes', quoteLimiter);
 
 // ── CORS ───────────────────────────────────────────────────────────────────────
 // Reglas de origen aceptado:

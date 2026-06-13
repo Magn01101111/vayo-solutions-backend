@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Sale = require('../models/sale.model');
 const Quote = require('../models/quote.model');
+const Product = require('../models/product.model');
 const { ROLES } = require('../constants/roles');
 const {
   ok,
@@ -42,7 +43,15 @@ async function getSales(req, res) {
     }
 
     const sales = await Sale.find(filter).sort({ createdAt: -1 });
-    return ok(res, sales.map(mapSale));
+    const mapped = sales.map(mapSale);
+
+    // CLIENTE solo ve sus ventas
+    if (req.user?.role === ROLES.CLIENTE) {
+      if (!req.user.clientId) return ok(res, []);
+      return ok(res, mapped.filter((s) => String(s.clientId) === String(req.user.clientId)));
+    }
+
+    return ok(res, mapped);
   } catch (error) {
     return serverError(res, error);
   }
@@ -56,6 +65,15 @@ async function getSaleById(req, res) {
     }
     const sale = await Sale.findById(req.params.id);
     if (!sale) return notFound(res, 'Venta no encontrada');
+
+    // CLIENTE solo ve sus propias ventas
+    if (
+      req.user?.role === ROLES.CLIENTE &&
+      (!sale.clientId || String(sale.clientId) !== String(req.user.clientId))
+    ) {
+      return notFound(res, 'Venta no encontrada');
+    }
+
     return ok(res, mapSale(sale));
   } catch (error) {
     return serverError(res, error);
@@ -114,6 +132,16 @@ async function createSaleFromQuote(req, res) {
       createdBy: req.user?.id ?? null,
       notes: notes || '',
     });
+
+    // Descontar stock de los productos vendidos
+    for (const item of sale.items) {
+      if (item.productId && item.quantity > 0) {
+        await Product.updateOne(
+          { _id: item.productId, stock: { $gte: item.quantity } },
+          { $inc: { stock: -item.quantity } },
+        );
+      }
+    }
 
     // Marcar la cotización como aceptada (quedó cerrada en venta)
     quote.metadata = quote.metadata || {};

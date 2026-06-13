@@ -39,6 +39,17 @@ const quoteSchema = new mongoose.Schema(
       index: true,
     },
 
+    /**
+     * Usuario interno (ADMIN/COTIZADOR/PROVEEDOR) que creó la cotización.
+     * null = la creó un cliente o un invitado desde el portal público.
+     */
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+
     // ── Snapshot de datos del cliente al momento de la cotización ────────────
     client: {
       customerType: {
@@ -95,6 +106,7 @@ const quoteSchema = new mongoose.Schema(
       discount: { type: Number, default: 0 },
       taxableBase: { type: Number, default: 0 },
       iva: { type: Number, default: 0 },
+      ivaPercent: { type: Number, default: null },
       shipping: { type: Number, default: 0 },
       total: { type: Number, default: 0 },
     },
@@ -127,7 +139,7 @@ const quoteSchema = new mongoose.Schema(
     metadata: {
       status: {
         type: String,
-        enum: ['sent', 'accepted', 'rejected', 'expired'],
+        enum: ['draft', 'sent', 'accepted', 'rejected', 'expired'],
         default: 'sent',
       },
       createdAt: { type: String, default: () => new Date().toISOString() },

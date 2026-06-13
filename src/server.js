@@ -6,6 +6,14 @@ const { startBackupScheduler } = require('./services/backup.scheduler');
 
 const PORT = process.env.PORT || 3000;
 
+const REQUIRED_ENV = ['ATLAS_URL', 'JWT_SECRET'];
+const missing = REQUIRED_ENV.filter((key) => !process.env[key]);
+if (missing.length > 0) {
+  console.error(`❌ Variables de entorno requeridas no configuradas: ${missing.join(', ')}`);
+  console.error('   Crea un archivo .env con estas variables o configúralas en el entorno.');
+  process.exit(1);
+}
+
 async function startServer() {
   try {
     await connectDB();
