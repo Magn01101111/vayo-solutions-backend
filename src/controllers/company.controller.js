@@ -19,6 +19,30 @@ async function getCompany(req, res) {
   }
 }
 
+// ── GET /api/company/public ───────────────────────────────────────────────────
+// Datos públicos de la empresa (SIN auth). Necesario para el front anónimo:
+// IVA en el carrito/cotización y datos de contacto en el footer. Devuelve sólo
+// un whitelist seguro — NO expone `invoiceTerms` ni otros campos internos.
+async function getPublicCompany(req, res) {
+  try {
+    let company = await Company.findOne().lean();
+    if (!company) {
+      company = (await Company.create({})).toObject();
+    }
+    return ok(res, {
+      name: company.name,
+      ivaPercent: company.ivaPercent ?? 19,
+      logoUrl: company.logoUrl,
+      address: company.address,
+      phone: company.phone,
+      email: company.email,
+      website: company.website,
+    });
+  } catch (error) {
+    return serverError(res, error);
+  }
+}
+
 // ── PUT /api/company ──────────────────────────────────────────────────────────
 async function updateCompany(req, res) {
   try {
@@ -64,4 +88,4 @@ async function uploadLogo(req, res) {
   }
 }
 
-module.exports = { getCompany, updateCompany, uploadLogo };
+module.exports = { getCompany, getPublicCompany, updateCompany, uploadLogo };

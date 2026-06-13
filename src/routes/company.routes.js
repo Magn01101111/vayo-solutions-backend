@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   getCompany,
+  getPublicCompany,
   updateCompany,
   uploadLogo,
 } = require('../controllers/company.controller');
@@ -9,6 +10,9 @@ const { uploadCompanyLogo } = require('../middlewares/upload.middleware');
 const { ROLES } = require('../constants/roles');
 
 const router = express.Router();
+
+// GET /api/company/public → datos públicos (IVA, contacto) sin auth
+router.get('/public', getPublicCompany);
 
 // GET /api/company → cualquier usuario autenticado puede ver la config
 router.get('/', verifyToken, getCompany);

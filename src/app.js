@@ -17,9 +17,11 @@ app.use(
 );
 
 // ── Rate limiting ───────────────────────────────────────────────────────────────
+// Límite global generoso: la app es una SPA autenticada y varias personas de una
+// misma oficina pueden compartir IP (NAT), por lo que 100/15min era demasiado bajo.
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, error: 'Demasiadas solicitudes. Intenta de nuevo más tarde.' },
@@ -33,11 +35,15 @@ const authLimiter = rateLimit({
   message: { ok: false, error: 'Demasiados intentos de autenticación. Espera un minuto.' },
 });
 
+// Anti-spam SOLO en la creación de cotizaciones (POST). Los GET de /api/quotes
+// (admin revisando, portal del cliente cargando su historial) NO deben limitarse
+// aquí — quedan cubiertos por el límite global.
 const quoteLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.method !== 'POST',
   message: { ok: false, error: 'Demasiadas cotizaciones. Espera un minuto.' },
 });
 
