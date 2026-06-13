@@ -396,7 +396,7 @@ const createQuote = async (req, res) => {
       subtotal += itemTotal;
 
       validItems.push({
-        productId: product._id.toString(),
+        productId: product._id,
         name: product.name,
         sku: product.sku || '',
         price: realPrice,
@@ -551,6 +551,33 @@ const sendQuoteByEmail = async (req, res) => {
   }
 };
 
+// ── POST /api/quotes/:id/duplicate ────────────────────────────────────────────
+async function duplicateQuote(req, res) {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return fail(res, 'ID de cotización inválido');
+    }
+
+    const original = await Quote.findById(req.params.id);
+    if (!original) return notFound(res, 'Cotización no encontrada');
+
+    const doc = original.toObject();
+    delete doc._id;
+    delete doc.folio;
+    delete doc.createdAt;
+    delete doc.updatedAt;
+    delete doc.__v;
+
+    doc.metadata = { status: 'draft', createdAt: new Date().toISOString() };
+    doc.createdBy = req.user?.id ?? null;
+
+    const quote = await Quote.create(doc);
+    return created(res, quote);
+  } catch (error) {
+    return serverError(res, error);
+  }
+}
+
 module.exports = {
   createQuote,
   getQuotes,
@@ -559,4 +586,5 @@ module.exports = {
   updateQuoteStatus,
   sendQuoteByEmail,
   downloadQuotePDF,
+  duplicateQuote,
 };

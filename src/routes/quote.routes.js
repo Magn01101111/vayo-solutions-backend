@@ -7,6 +7,7 @@ const {
   updateQuoteStatus,
   sendQuoteByEmail,
   downloadQuotePDF,
+  duplicateQuote,
 } = require('../controllers/quote.controller');
 const { verifyToken, optionalAuth, requireRole } = require('../middlewares/auth.middleware');
 const { ROLES } = require('../constants/roles');
@@ -34,5 +35,8 @@ router.post('/:id/send-email', verifyToken, sendQuoteByEmail);
 
 // PDF
 router.get('/:id/pdf', optionalAuth, downloadQuotePDF);
+
+// Duplicar cotización
+router.post('/:id/duplicate', verifyToken, duplicateQuote);
 
 module.exports = router;

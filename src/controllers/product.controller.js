@@ -139,11 +139,19 @@ async function getProducts(req, res) {
       ];
     }
 
+    const sortMap = {
+      price_asc:  { price: 1 },
+      price_desc: { price: -1 },
+      name:       { name: 1 },
+      newest:     { createdAt: -1 },
+    };
+    const sort = sortMap[req.query.sort] || { createdAt: -1 };
+
     if (usePagination) {
       const [products, total] = await Promise.all([
         Product.find(filter)
           .populate('category', 'name slug')
-          .sort({ createdAt: -1 })
+          .sort(sort)
           .skip((page - 1) * limit)
           .limit(limit),
         Product.countDocuments(filter),

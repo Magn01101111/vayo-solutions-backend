@@ -74,7 +74,7 @@ const quoteSchema = new mongoose.Schema(
     // ── Ítems ────────────────────────────────────────────────────────────────
     items: [
       {
-        productId: { type: String },
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
         name: { type: String },
         sku: { type: String, default: '' },
         price: { type: Number, default: 0 },
