@@ -72,8 +72,7 @@ async function sendPasswordResetEmail(to, resetUrl) {
  * @param {number} [opts.total]     total para mostrar en el cuerpo
  */
 async function sendQuoteEmail({ to, folio, clientName, pdfBuffer, total }) {
-  const transport = getTransporter();
-  if (!transport) {
+  if (!transporter) {
     console.log(`[email.service] (simulado) Cotización ${folio} para ${to}`);
     return { simulated: true };
   }
@@ -84,7 +83,7 @@ async function sendQuoteEmail({ to, folio, clientName, pdfBuffer, total }) {
       ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(total)
       : '';
 
-  await transport.sendMail({
+  await transporter.sendMail({
     from,
     to,
     subject: `Tu cotización ${folio} - VAYO Solutions`,
@@ -109,4 +108,82 @@ async function sendQuoteEmail({ to, folio, clientName, pdfBuffer, total }) {
   return { sent: true };
 }
 
-module.exports = { sendPasswordResetEmail, sendQuoteEmail };
+/**
+ * Notifica al cotizador/admin que el cliente vio su cotización por primera vez.
+ * @param {object} opts
+ * @param {string} opts.to         email del cotizador o admin
+ * @param {string} opts.folio      folio de la cotización
+ * @param {string} [opts.clientName] nombre del cliente
+ */
+async function sendQuoteViewedNotification({ to, folio, clientName }) {
+  if (!transporter) {
+    console.log(`[email.service] (simulado) Cotización ${folio} vista por ${clientName || 'cliente'}`);
+    return { simulated: true };
+  }
+
+  const from = process.env.SMTP_FROM || 'noreply@vayo.cl';
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: `Cotización ${folio} fue revisada – VAYO Solutions`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #1a1a1a;">
+        <h2 style="color: #0c447c;">VAYO Solutions</h2>
+        <p>El cliente${clientName ? ' <strong>' + clientName + '</strong>' : ''} ha revisado la cotización <strong>${folio}</strong>.</p>
+        <p>Ingresa al sistema para hacer seguimiento o contactar al cliente.</p>
+        <p style="color: #666; font-size: 13px; margin-top: 24px;">
+          Este es un mensaje automático de VAYO Solutions.
+        </p>
+      </div>
+    `,
+  });
+
+  return { sent: true };
+}
+
+/**
+ * Notifica al cotizador/admin que el cliente aceptó o rechazó una cotización.
+ * @param {object} opts
+ * @param {string} opts.to         email del cotizador o admin
+ * @param {string} opts.folio      folio de la cotización
+ * @param {string} opts.status     'accepted' | 'rejected'
+ * @param {string} [opts.clientName] nombre del cliente
+ */
+async function sendQuoteStatusNotification({ to, folio, status, clientName }) {
+  if (!transporter) {
+    console.log(`[email.service] (simulado) Cotización ${folio} → ${status} para ${to}`);
+    return { simulated: true };
+  }
+
+  const from = process.env.SMTP_FROM || 'noreply@vayo.cl';
+  const actionLabel = status === 'accepted' ? 'ACEPTADA' : 'RECHAZADA';
+  const color = status === 'accepted' ? '#2e7d32' : '#c62828';
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: `Cotización ${folio} ${actionLabel} – VAYO Solutions`,
+    html: `
+      <div style="font-family: Arial, sans-serif; color: #1a1a1a;">
+        <h2 style="color: #0c447c;">VAYO Solutions</h2>
+        <p>La cotización <strong>${folio}</strong>${clientName ? ' del cliente <strong>' + clientName + '</strong>' : ''} ha sido
+          <strong style="color: ${color};">${actionLabel}</strong> por el cliente.
+        </p>
+        <p>Ingresa al sistema para revisar el estado y tomar las acciones correspondientes.</p>
+        <p style="color: #666; font-size: 13px; margin-top: 24px;">
+          Este es un mensaje automático de VAYO Solutions.
+        </p>
+      </div>
+    `,
+  });
+
+  return { sent: true };
+}
+
+module.exports = {
+  sendPasswordResetEmail,
+  sendQuoteEmail,
+  sendQuoteViewedNotification,
+  sendQuoteStatusNotification,
+};

@@ -17,13 +17,21 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest --runInBand",
     "seed": "node src/seeds/seed.js",
     "seed:categories": "node src/seeds/seed-categories.js",
     "seed:demo": "node src/seeds/seed-demo.js",
     "seed:supreviews": "node src/seeds/seed-suppliers-reviews.js",
     "backup": "node src/scripts/backup.js",
     "restore": "node src/scripts/restore.js"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/src/__tests__/**/*.test.js"],
+    "collectCoverageFrom": [
+      "src/utils/**/*.js",
+      "src/controllers/coupon.controller.js"
+    ]
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -44,6 +52,7 @@
     "pdfkit": "^0.18.0"
   },
   "devDependencies": {
+    "jest": "^30.4.2",
     "nodemon": "^3.1.14"
   }
 }

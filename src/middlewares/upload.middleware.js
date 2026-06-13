@@ -33,4 +33,11 @@ const uploadCompanyLogo = multer({
   limits: { fileSize: 2 * 1024 * 1024 },
 }).single('logo');
 
-module.exports = { uploadProductImage, uploadCompanyLogo };
+/** Foto de perfil de usuario */
+const uploadProfilePhoto = multer({
+  storage,
+  fileFilter: imageFilter,
+  limits: { fileSize: 2 * 1024 * 1024 },
+}).single('photo');
+
+module.exports = { uploadProductImage, uploadCompanyLogo, uploadProfilePhoto };

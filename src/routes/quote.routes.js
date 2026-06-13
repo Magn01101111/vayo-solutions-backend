@@ -5,6 +5,7 @@ const {
   getQuoteById,
   getQuoteByFolio,
   updateQuoteStatus,
+  markQuoteViewed,
   sendQuoteByEmail,
   downloadQuotePDF,
   duplicateQuote,
@@ -29,6 +30,9 @@ router.get('/:id', verifyToken, getQuoteById);
 
 // Cambiar estado — control de roles en el controller
 router.patch('/:id/status', verifyToken, updateQuoteStatus);
+
+// Marcar como vista por el cliente (primera apertura)
+router.patch('/:id/mark-viewed', verifyToken, markQuoteViewed);
 
 // Enviar por email (con PDF adjunto) — usuario autenticado
 router.post('/:id/send-email', verifyToken, sendQuoteByEmail);

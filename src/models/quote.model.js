@@ -135,6 +135,11 @@ const quoteSchema = new mongoose.Schema(
     acceptsTerms: { type: Boolean, default: false },
     acceptsMarketing: { type: Boolean, default: false },
 
+    // ── Trazabilidad de lectura ───────────────────────────────────────────────
+    // Fecha en que el CLIENTE abrió la cotización por primera vez.
+    // null = no vista aún.
+    viewedAt: { type: Date, default: null },
+
     // ── Metadata ─────────────────────────────────────────────────────────────
     metadata: {
       status: {

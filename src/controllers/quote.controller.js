@@ -7,7 +7,12 @@ const Product = require('../models/product.model');
 const Company = require('../models/company.model');
 const { evaluateCoupon } = require('./coupon.controller');
 const { generateQuotePDF } = require('../services/pdf.service');
-const { sendQuoteEmail } = require('../services/email.service');
+const {
+  sendQuoteEmail,
+  sendQuoteViewedNotification,
+  sendQuoteStatusNotification,
+} = require('../services/email.service');
+const User = require('../models/user.model');
 const { ROLES } = require('../constants/roles');
 const { validateRut, normalizeChileanPhone } = require('../utils/validators');
 const {
@@ -317,7 +322,79 @@ const updateQuoteStatus = async (req, res) => {
     quote.metadata.status = status;
     await quote.save();
 
+    // Notificar al cotizador/admin cuando el CLIENTE acepta o rechaza
+    if (isClientOwner && (status === 'accepted' || status === 'rejected')) {
+      resolveNotificationEmail(quote).then((to) => {
+        if (to) {
+          sendQuoteStatusNotification({
+            to,
+            folio: quote.folio,
+            status,
+            clientName: quote.client?.name,
+          }).catch(() => {});
+        }
+      });
+    }
+
     return ok(res, quote);
+  } catch (error) {
+    return serverError(res, error);
+  }
+};
+
+/**
+ * Resuelve el email al que enviar notificaciones internas de una cotización.
+ * Prioridad: autor (createdBy) > email de la empresa > null.
+ */
+async function resolveNotificationEmail(quote) {
+  try {
+    if (quote.createdBy) {
+      const author = await User.findById(quote.createdBy).select('email').lean();
+      if (author?.email) return author.email;
+    }
+    const company = await Company.findOne().select('email').lean();
+    return company?.email || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── PATCH /api/quotes/:id/mark-viewed ─────────────────────────────────────────
+// El CLIENTE marca su cotización como vista (primera apertura).
+// Envía notificación al cotizador/admin solo la primera vez.
+const markQuoteViewed = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return fail(res, 'ID de cotización inválido');
+    }
+
+    const quote = await Quote.findById(req.params.id);
+    if (!quote) return notFound(res, 'Cotización no encontrada');
+
+    // Solo el CLIENTE dueño puede llamar a este endpoint
+    if (req.user?.role === ROLES.CLIENTE) {
+      if (!quote.clientId || String(quote.clientId) !== String(req.user.clientId)) {
+        return notFound(res, 'Cotización no encontrada');
+      }
+    }
+
+    if (!quote.viewedAt) {
+      quote.viewedAt = new Date();
+      await quote.save();
+
+      // Notificar al cotizador/admin (no bloquea la respuesta si falla)
+      resolveNotificationEmail(quote).then((to) => {
+        if (to) {
+          sendQuoteViewedNotification({
+            to,
+            folio: quote.folio,
+            clientName: quote.client?.name,
+          }).catch(() => {});
+        }
+      });
+    }
+
+    return ok(res, { viewedAt: quote.viewedAt });
   } catch (error) {
     return serverError(res, error);
   }
@@ -498,7 +575,8 @@ const downloadQuotePDF = async (req, res) => {
         .json({ ok: false, error: 'Token de acceso no proporcionado o inválido' });
     }
 
-    const pdfBuffer = await generateQuotePDF(quote);
+    const company = await Company.findOne().lean().catch(() => ({}));
+    const pdfBuffer = await generateQuotePDF(quote, company || {});
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
@@ -529,7 +607,8 @@ const sendQuoteByEmail = async (req, res) => {
       return fail(res, 'No hay email de destino. La cotización no tiene email de cliente.');
     }
 
-    const pdfBuffer = await generateQuotePDF(quote);
+    const company = await Company.findOne().lean().catch(() => ({}));
+    const pdfBuffer = await generateQuotePDF(quote, company || {});
 
     const result = await sendQuoteEmail({
       to,
@@ -584,6 +663,7 @@ module.exports = {
   getQuoteById,
   getQuoteByFolio,
   updateQuoteStatus,
+  markQuoteViewed,
   sendQuoteByEmail,
   downloadQuotePDF,
   duplicateQuote,

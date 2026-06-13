@@ -6,6 +6,7 @@ const Client = require('../models/client.model');
 const { ROLES } = require('../constants/roles');
 const { validateRut, normalizeChileanPhone } = require('../utils/validators');
 const { sendPasswordResetEmail } = require('../services/email.service');
+const { uploadBuffer } = require('../services/cloudinary.service');
 const {
   ok,
   created,
@@ -304,11 +305,61 @@ async function confirmPasswordReset(req, res) {
   }
 }
 
+// ── PATCH /api/auth/me ────────────────────────────────────────────────────────
+// Permite a cualquier usuario autenticado actualizar su nombre y teléfono.
+async function updateProfile(req, res) {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return notFound(res, 'Usuario no encontrado');
+
+    const { name, phone } = req.body;
+
+    if (name?.trim()) user.name = name.trim();
+
+    if (phone !== undefined) {
+      if (!phone || phone === '') {
+        user.phone = '';
+      } else {
+        const canonical = normalizeChileanPhone(phone);
+        if (!canonical) return fail(res, 'Teléfono inválido. Debe ser un móvil chileno (ej. 9 1234 5678).');
+        user.phone = canonical;
+      }
+    }
+
+    await user.save();
+    return ok(res, mapUserPublic(user));
+  } catch (error) {
+    return serverError(res, error);
+  }
+}
+
+// ── PATCH /api/auth/me/photo ──────────────────────────────────────────────────
+// Sube la foto de perfil a Cloudinary y actualiza User.profileImage.
+// Requiere multipart/form-data con campo "photo".
+async function uploadProfilePhotoHandler(req, res) {
+  try {
+    if (!req.file) return fail(res, 'No se recibió ninguna imagen');
+
+    const user = await User.findById(req.user.id);
+    if (!user) return notFound(res, 'Usuario no encontrado');
+
+    const { url } = await uploadBuffer(req.file.buffer, 'vayo/profiles');
+    user.profileImage = url;
+    await user.save();
+
+    return ok(res, mapUserPublic(user));
+  } catch (error) {
+    return serverError(res, error);
+  }
+}
+
 module.exports = {
   register,
   login,
   logout,
   getProfile,
+  updateProfile,
+  uploadProfilePhotoHandler,
   changePassword,
   requestPasswordReset,
   confirmPasswordReset,

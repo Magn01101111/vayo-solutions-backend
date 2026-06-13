@@ -5,12 +5,15 @@ const {
   login,
   logout,
   getProfile,
+  updateProfile,
+  uploadProfilePhotoHandler,
   changePassword,
   requestPasswordReset,
   confirmPasswordReset,
 } = require('../controllers/auth.controller');
 const { verifyToken } = require('../middlewares/auth.middleware');
 const { handleValidation } = require('../middlewares/validate.middleware');
+const { uploadProfilePhoto } = require('../middlewares/upload.middleware');
 
 const router = express.Router();
 
@@ -46,6 +49,12 @@ router.post('/logout', verifyToken, logout);
 
 // GET /api/auth/me
 router.get('/me', verifyToken, getProfile);
+
+// PATCH /api/auth/me  — editar nombre y teléfono del propio usuario
+router.patch('/me', verifyToken, updateProfile);
+
+// PATCH /api/auth/me/photo  — actualizar foto de perfil (multipart/form-data)
+router.patch('/me/photo', verifyToken, uploadProfilePhoto, uploadProfilePhotoHandler);
 
 // PUT /api/auth/me/password
 router.put(

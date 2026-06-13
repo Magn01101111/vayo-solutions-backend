@@ -71,28 +71,48 @@ const sectionTitle = (doc, label) => {
 };
 
 // ── Encabezado ────────────────────────────────────────────────────────────────
-const drawHeader = (doc, quote) => {
+const drawHeader = (doc, quote, company = {}) => {
   const top = PAGE_MARGIN;
 
-  // Logo simple (cuadro con texto)
+  const cName    = company.name    || 'VAYO Solutions';
+  const cEmail   = company.email   || '';
+  const cPhone   = company.phone   || '';
+  const cAddress = typeof company.address === 'string' ? company.address : '';
+
+  // Iniciales de la empresa (máx. 4 chars) dentro de un cuadro de marca
+  const initials = cName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+
   doc.save()
     .roundedRect(PAGE_MARGIN, top, 50, 50, 6)
     .fill(COLORS.brand);
 
   doc.fillColor('#ffffff')
     .font('Helvetica-Bold')
-    .fontSize(13)
-    .text('VAYO', PAGE_MARGIN, top + 18, { width: 50, align: 'center' });
+    .fontSize(initials.length > 2 ? 10 : 13)
+    .text(initials, PAGE_MARGIN, top + 18, { width: 50, align: 'center' });
   doc.restore();
 
   // Datos de la empresa
   const brandX = PAGE_MARGIN + 62;
   doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(12)
-    .text('VAYO Solutions SpA', brandX, top + 4);
+    .text(cName, brandX, top + 4);
 
-  doc.fillColor(COLORS.muted).font('Helvetica').fontSize(8)
-    .text('contacto@vayo.cl  ·  +56 2 2345 6789', brandX, top + 22)
-    .text('Av. Providencia 1234, Santiago, Chile', brandX, top + 33);
+  const contactLine = [cEmail, cPhone].filter(Boolean).join('  ·  ');
+  let contactY = top + 22;
+  if (contactLine) {
+    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(8)
+      .text(contactLine, brandX, contactY);
+    contactY += 11;
+  }
+  if (cAddress) {
+    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(8)
+      .text(cAddress, brandX, contactY);
+  }
 
   // Folio + fecha (derecha)
   const rightX = doc.page.width - PAGE_MARGIN - 200;
@@ -430,7 +450,7 @@ const drawFooter = (doc, quote) => {
 };
 
 // ── Generador principal ───────────────────────────────────────────────────────
-const generateQuotePDF = (quote) => {
+const generateQuotePDF = (quote, company = {}) => {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: 'A4', margin: PAGE_MARGIN });
@@ -439,7 +459,7 @@ const generateQuotePDF = (quote) => {
       doc.on('end', () => resolve(Buffer.concat(buffers)));
       doc.on('error', reject);
 
-      drawHeader(doc, quote);
+      drawHeader(doc, quote, company);
       drawClientBlock(doc, quote);
       drawItemsTable(doc, quote);
       drawTotalsAndTerms(doc, quote);
