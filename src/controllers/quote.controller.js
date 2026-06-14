@@ -371,14 +371,18 @@ const markQuoteViewed = async (req, res) => {
     const quote = await Quote.findById(req.params.id);
     if (!quote) return notFound(res, 'Cotización no encontrada');
 
-    // Solo el CLIENTE dueño puede llamar a este endpoint
-    if (req.user?.role === ROLES.CLIENTE) {
-      if (!quote.clientId || String(quote.clientId) !== String(req.user.clientId)) {
-        return notFound(res, 'Cotización no encontrada');
-      }
+    // Solo el CLIENTE dueño marca la cotización como vista. El resto de roles
+    // (interno) no debe disparar la notificación "el cliente la revisó".
+    const isClientOwner =
+      req.user?.role === ROLES.CLIENTE &&
+      quote.clientId &&
+      String(quote.clientId) === String(req.user.clientId);
+
+    if (req.user?.role === ROLES.CLIENTE && !isClientOwner) {
+      return notFound(res, 'Cotización no encontrada');
     }
 
-    if (!quote.viewedAt) {
+    if (isClientOwner && !quote.viewedAt) {
       quote.viewedAt = new Date();
       await quote.save();
 
