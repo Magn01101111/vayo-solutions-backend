@@ -34,10 +34,10 @@ Revisa .env.example para más variables opcionales (FRONTEND_URL, PORT, CLOUDINA
 
 Instalacion rapida
 -------------------
-git clone https://github.com/Magn01101111/vayo-solutions-backend.git
-cd vayo-solutions-backend
-npm install
-cp .env.example .env
+git clone https://github.com/Magn01101111/vayo-solutions-backend.git <br> 
+cd vayo-solutions-backend <br> 
+npm install<br> 
+cp .env.example .env<br> 
 # editar .env y configurar ATLAS_URL y JWT_SECRET (y otras variables si es necesario)
 
 Ejecutar localmente
@@ -49,37 +49,37 @@ El servidor por defecto escucha en el puerto indicado por PORT (o 3000 si no est
 ---------------------------------
 Scripts útiles (package.json)
 ------------------------------
-npm start — Ejecuta node src/server.js
-npm run dev — Ejecuta nodemon src/server.js (desarrollo)
-npm test — Ejecuta tests con Jest
-npm run seed — Ejecuta node src/seeds/seed.js (puebla datos)
-npm run seed:categories — Ejecuta node src/seeds/seed-categories.js
-npm run seed:demo — Ejecuta node src/seeds/seed-demo.js
-npm run seed:supreviews — Ejecuta node src/seeds/seed-suppliers-reviews.js
-npm run backup — Ejecuta node src/scripts/backup.js
-npm run restore — Ejecuta node src/scripts/restore.js
+npm start — Ejecuta node src/server.js<br> 
+npm run dev — Ejecuta nodemon src/server.js (desarrollo)<br> 
+npm test — Ejecuta tests con Jest<br> 
+npm run seed — Ejecuta node src/seeds/seed.js (puebla datos)<br> 
+npm run seed:categories — Ejecuta node src/seeds/seed-categories.js<br> 
+npm run seed:demo — Ejecuta node src/seeds/seed-demo.js<br> 
+npm run seed:supreviews — Ejecuta node src/seeds/seed-suppliers-reviews.js<br> 
+npm run backup — Ejecuta node src/scripts/backup.js<br> 
+npm run restore — Ejecuta node src/scripts/restore.js<br> 
 Endpoints básicos de diagnóstico
 GET /health — comprueba el ping a DB y estado de la app
 GET / — mensaje raíz ("Backend funcionando correctamente 🚀")
 GET /test-db — lista colecciones (útil para verificar la conexión con MongoDB)
 Rutas API principales (montadas en src/routes/index.js):
 
-/api/auth
-/api/users
-/api/categories
-/api/products
-/api/clients
-/api/company
-/api/quotes
-/api/sales
-/api/stats
-/api/reports
-/api/suppliers
-/api/reviews
-/api/coupons
-/api/banners
-/api/favorites
-/api/upload
+/api/auth<br> 
+/api/users<br> 
+/api/categories<br> 
+/api/products<br> 
+/api/clients<br> 
+/api/company<br> 
+/api/quotes<br> 
+/api/sales<br> 
+/api/stats<br> 
+/api/reports<br> 
+/api/suppliers<br> 
+/api/reviews<br> 
+/api/coupons<br> 
+/api/banners<br> 
+/api/favorites<br> 
+/api/upload<br> 
 (Internamente cada router aplica su middleware de autenticación según corresponda.)
 -------------------------------------
 
