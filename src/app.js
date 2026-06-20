@@ -62,15 +62,40 @@ const FRONTEND_URLS = (process.env.FRONTEND_URL || 'http://localhost:4200')
   .map((s) => s.trim())
   .filter(Boolean);
 
+const ALLOWED_EXACT_ORIGINS = [
+  'http://localhost:4200',
+  'http://localhost:8100',
+  'http://127.0.0.1:4200',
+  'http://127.0.0.1:8100',
+  'capacitor://localhost',
+  'ionic://localhost',
+];
+
 const ALLOWED_HOST_PATTERNS = [
   /\.netlify\.app$/,   // *.netlify.app
   /\.onrender\.com$/,  // *.onrender.com
+  /^(localhost|127\.0\.0\.1)$/i,
 ];
 
 function isOriginAllowed(origin) {
-  if (FRONTEND_URLS.includes('*') || FRONTEND_URLS.includes(origin)) return true;
+  if (
+    FRONTEND_URLS.includes('*')
+    || FRONTEND_URLS.includes(origin)
+    || ALLOWED_EXACT_ORIGINS.includes(origin)
+  ) {
+    return true;
+  }
+
   try {
-    const { hostname } = new URL(origin);
+    const { hostname, protocol } = new URL(origin);
+
+    if (
+      /^(localhost|127\.0\.0\.1)$/i.test(hostname)
+      && ['http:', 'https:'].includes(protocol)
+    ) {
+      return true;
+    }
+
     return ALLOWED_HOST_PATTERNS.some((re) => re.test(hostname));
   } catch {
     return false;

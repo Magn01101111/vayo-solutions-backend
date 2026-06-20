@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
+const { EJSON } = require('bson');
 
 /**
  * Servicio de respaldo (backup) de la base de datos.
@@ -69,7 +70,7 @@ async function runBackup() {
 
     const docs = await db.collection(name).find({}).toArray();
     const filePath = path.join(targetDir, `${name}.json`);
-    fs.writeFileSync(filePath, JSON.stringify(docs, null, 2), 'utf-8');
+    fs.writeFileSync(filePath, EJSON.stringify(docs, null, 2), 'utf-8');
 
     summary[name] = docs.length;
     totalDocs += docs.length;
