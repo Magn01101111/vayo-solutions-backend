@@ -27,10 +27,14 @@ function resolveImages(product) {
 
 function mapProductList(product) {
   const images = resolveImages(product);
+  const populatedCategory =
+    product.category && typeof product.category === 'object' && product.category.name
+      ? product.category
+      : null;
   return {
     id: product._id,
-    categoryId: product.category._id,
-    categoryName: product.category.name,
+    categoryId: populatedCategory?._id ?? product.category ?? null,
+    categoryName: populatedCategory?.name ?? null,
     name: product.name,
     sku: product.sku,
     description: product.description,
@@ -73,13 +77,19 @@ function mapSuppliers(product) {
 }
 
 function mapProductDetail(product) {
+  const populatedCategory =
+    product.category && typeof product.category === 'object' && product.category.name
+      ? product.category
+      : null;
   return {
     ...mapProductList(product),
-    category: {
-      id: product.category._id,
-      name: product.category.name,
-      slug: product.category.slug,
-    },
+    category: populatedCategory
+      ? {
+          id: populatedCategory._id,
+          name: populatedCategory.name,
+          slug: populatedCategory.slug,
+        }
+      : null,
     specs: product.specs ?? [],
     dimensions: product.dimensions ?? {},
     compatibility: product.compatibility ?? [],
