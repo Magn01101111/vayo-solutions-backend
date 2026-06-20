@@ -17,6 +17,10 @@ const couponRoutes  = require('./coupon.routes');
 const bannerRoutes  = require('./banner.routes');
 const favoriteRoutes = require('./favorite.routes');
 const uploadRoutes  = require('./upload.routes.js');
+const mlRoutes      = require('./ml.routes');
+const rewardsRoutes = require('./rewards.routes');
+const cartRoutes    = require('./cart.routes');
+const pushRoutes    = require('./push.routes');
 const router = express.Router();
 
 // Públicas
@@ -40,5 +44,9 @@ router.use('/api/banners',    bannerRoutes);
 router.use('/api/favorites',  favoriteRoutes);
 
 router.use('/api/upload', uploadRoutes);
+router.use('/api/ml',      mlRoutes);
+router.use('/api/rewards', rewardsRoutes);
+router.use('/api/cart',    cartRoutes);
+router.use('/api/devices', pushRoutes);
 
 module.exports = router;
