@@ -5,7 +5,8 @@ const Client = require('../models/client.model');
 const Coupon = require('../models/coupon.model');
 const Product = require('../models/product.model');
 const Company = require('../models/company.model');
-const { evaluateCoupon } = require('./coupon.controller');
+const Notification = require('../models/notification.model');
+const { evaluateCoupon, consumeCoupon } = require('./coupon.controller');
 const { generateQuotePDF } = require('../services/pdf.service');
 const {
   sendQuoteEmail,
@@ -497,7 +498,9 @@ const createQuote = async (req, res) => {
       const coupon = await Coupon.findOne({
         code: doc.coupon.code.toUpperCase().trim(),
       });
-      const result = evaluateCoupon(coupon, subtotal);
+      // Pasar el userId: los cupones personales (ownerUserId) solo aplican a su
+      // titular. Para invitados (sin sesión) va null → solo cupones públicos.
+      const result = evaluateCoupon(coupon, subtotal, req.user?.id ?? null);
       if (result.valid) {
         appliedCoupon = coupon;
         const discount = result.discount;
@@ -541,11 +544,25 @@ const createQuote = async (req, res) => {
 
     const quote = await Quote.create(doc);
 
+    // F2-3: Emitir notificación admin al crear cotización
+    Notification.create({
+      type: 'new_quote',
+      recipientRole: 'admin',
+      title: 'Nueva cotización',
+      body: `${doc.client?.name ?? 'Cliente'} · ${quote.folio}`,
+      link: `/admin/quotes`,
+    }).catch(() => {});
+
     if (appliedCoupon) {
-      Coupon.updateOne(
-        { _id: appliedCoupon._id },
-        { $inc: { usedCount: 1 } }
-      ).catch(() => {});
+      // Consumir el cupón una sola vez al CREAR la cotización (no en el PDF):
+      // +1 a usedCount y, si es de uso único, marcar redeemedAt/redeemedBy.
+      // No es fatal: si el guardado falla, la cotización ya quedó creada.
+      consumeCoupon(appliedCoupon, req.user?.id ?? null);
+      try {
+        await appliedCoupon.save();
+      } catch (err) {
+        console.error('No se pudo consumir el cupón', appliedCoupon.code, err.message);
+      }
     }
 
     const pdfToken = jwt.sign(

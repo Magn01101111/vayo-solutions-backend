@@ -24,6 +24,8 @@ async function claimReward(req, res) {
       description: 'Cupón VAYO Escáner — 10% de descuento',
       maxUses: 1,
       validUntil: expiresAt,
+      ownerUserId: userId, // atado a la cuenta → aparece en el wallet "Mis cupones"
+      origin: 'scan',
       isActive: true,
     });
 

@@ -60,6 +60,31 @@ const couponSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    // ── Posesión y trazabilidad (Fase 2) ────────────────────────────────────
+    // ownerUserId: si está seteado, el cupón es personal de esa cuenta
+    // (null = cupón público/genérico canjeable por cualquiera).
+    ownerUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    // origin: de dónde nació el cupón (bienvenida, escaneo móvil, admin, promo).
+    origin: {
+      type: String,
+      enum: ['welcome', 'scan', 'admin', 'promo'],
+      default: 'admin',
+    },
+    // redeemedAt / redeemedBy: marca de canje para cupones de uso único.
+    redeemedAt: {
+      type: Date,
+      default: null,
+    },
+    redeemedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
   },
   { timestamps: true, versionKey: false }
 );

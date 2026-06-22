@@ -98,3 +98,28 @@ describe('evaluateCoupon', () => {
     expect(r.discount).toBe(10000); // capped al subtotal
   });
 });
+
+describe('evaluateCoupon — posesión (ownerUserId)', () => {
+  test('cupón público (sin ownerUserId) es válido sin userId', () => {
+    const r = evaluateCoupon(makeCoupon({ ownerUserId: null }), 10000);
+    expect(r.valid).toBe(true);
+  });
+
+  test('cupón con dueño falla si no se entrega userId', () => {
+    const r = evaluateCoupon(makeCoupon({ ownerUserId: 'user-a' }), 10000);
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe('Este cupón pertenece a otra cuenta');
+  });
+
+  test('cupón con dueño falla para otro usuario', () => {
+    const r = evaluateCoupon(makeCoupon({ ownerUserId: 'user-a' }), 10000, 'user-b');
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe('Este cupón pertenece a otra cuenta');
+  });
+
+  test('cupón con dueño es válido para su titular', () => {
+    const r = evaluateCoupon(makeCoupon({ ownerUserId: 'user-a' }), 10000, 'user-a');
+    expect(r.valid).toBe(true);
+    expect(r.discount).toBe(1000); // 10% de 10000
+  });
+});

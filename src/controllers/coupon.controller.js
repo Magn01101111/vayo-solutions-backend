@@ -21,6 +21,9 @@ function mapCoupon(c) {
     usedCount: c.usedCount,
     validUntil: c.validUntil,
     isActive: c.isActive,
+    ownerUserId: c.ownerUserId,
+    origin: c.origin,
+    redeemedAt: c.redeemedAt,
     createdAt: c.createdAt,
   };
 }
@@ -29,8 +32,13 @@ function mapCoupon(c) {
  * Evalúa si un cupón es aplicable a un subtotal dado.
  * Devuelve { valid, reason?, discount? }.
  * Reutilizable desde validate (público) y desde createQuote.
+ *
+ * @param {object|null} coupon   documento de cupón (o null si no se encontró).
+ * @param {number}      subtotal subtotal sobre el que se calcula el descuento.
+ * @param {string|null} userId   id del usuario autenticado (o null). Si el cupón
+ *                               tiene ownerUserId, solo su titular puede aplicarlo.
  */
-function evaluateCoupon(coupon, subtotal) {
+function evaluateCoupon(coupon, subtotal, userId = null) {
   if (!coupon) return { valid: false, reason: 'Cupón no encontrado' };
   if (!coupon.isActive) return { valid: false, reason: 'Cupón no disponible' };
   if (coupon.validUntil && new Date() > coupon.validUntil) {
@@ -45,6 +53,13 @@ function evaluateCoupon(coupon, subtotal) {
       reason: `Requiere un subtotal mínimo de $${coupon.minSubtotal.toLocaleString('es-CL')}`,
     };
   }
+  // Posesión: un cupón personal (ownerUserId) solo lo aplica su titular.
+  if (
+    coupon.ownerUserId &&
+    (userId == null || String(coupon.ownerUserId) !== String(userId))
+  ) {
+    return { valid: false, reason: 'Este cupón pertenece a otra cuenta' };
+  }
 
   const discount =
     coupon.type === 'percentage'
@@ -52,6 +67,21 @@ function evaluateCoupon(coupon, subtotal) {
       : Math.min(coupon.value, subtotal);
 
   return { valid: true, discount };
+}
+
+/**
+ * Consume un cupón válido: incrementa usedCount y, si es de uso único
+ * (maxUses === 1), lo marca como canjeado (redeemedAt/redeemedBy).
+ * Muta el documento recibido; el caller es responsable de persistir (`save`).
+ * Reutilizable desde createQuote. No valida (úsese DESPUÉS de evaluateCoupon).
+ */
+function consumeCoupon(coupon, userId = null) {
+  coupon.usedCount = (coupon.usedCount || 0) + 1;
+  if (coupon.maxUses === 1) {
+    coupon.redeemedAt = new Date();
+    coupon.redeemedBy = userId ?? null;
+  }
+  return coupon;
 }
 
 // ── GET /api/coupons ───────────────────────────────────────────────────────────
@@ -75,7 +105,7 @@ async function validateCoupon(req, res) {
     if (!code) return fail(res, 'Ingresa un código');
 
     const coupon = await Coupon.findOne({ code });
-    const result = evaluateCoupon(coupon, subtotal);
+    const result = evaluateCoupon(coupon, subtotal, req.user?.id ?? null);
 
     if (!result.valid) return fail(res, result.reason);
 
@@ -86,6 +116,32 @@ async function validateCoupon(req, res) {
       description: coupon.description,
       discount: result.discount,
     });
+  } catch (error) {
+    return serverError(res, error);
+  }
+}
+
+// ── GET /api/coupons/mine ──────────────────────────────────────────────────────
+// Cliente autenticado: sus cupones personales VIGENTES (no expirados, con usos
+// disponibles y sin canjear). Filtra en memoria sobre los del dueño.
+async function getMyCoupons(req, res) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return fail(res, 'Sesión requerida');
+
+    const now = new Date();
+    const coupons = await Coupon.find({ ownerUserId: userId, isActive: true }).sort({
+      createdAt: -1,
+    });
+
+    const vigentes = coupons.filter((c) => {
+      const expirado = c.validUntil && now > c.validUntil;
+      const agotado = c.maxUses != null && c.usedCount >= c.maxUses;
+      const canjeado = !!c.redeemedAt;
+      return !expirado && !agotado && !canjeado;
+    });
+
+    return ok(res, vigentes.map(mapCoupon));
   } catch (error) {
     return serverError(res, error);
   }
@@ -160,11 +216,13 @@ async function deleteCoupon(req, res) {
 
 module.exports = {
   getCoupons,
+  getMyCoupons,
   validateCoupon,
   createCoupon,
   updateCoupon,
   deleteCoupon,
   // helpers reutilizables
   evaluateCoupon,
+  consumeCoupon,
   mapCoupon,
 };

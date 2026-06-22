@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
 const Client = require('../models/client.model');
+const Coupon = require('../models/coupon.model');
 const { ROLES } = require('../constants/roles');
 const { validateRut, normalizeChileanPhone } = require('../utils/validators');
 const { sendPasswordResetEmail } = require('../services/email.service');
@@ -48,6 +49,51 @@ function mapUserPublic(user) {
     profileImage: user.profileImage,
     clientId: user.clientId ?? null,
   };
+}
+
+/**
+ * Emite el cupón de bienvenida (15%, uso único, 30 días) atado al nuevo CLIENTE.
+ * Reintenta con sufijo aleatorio ante una colisión de código (improbable con
+ * ObjectId, pero el índice `code` es único). Devuelve un resumen del cupón o
+ * lanza si no logra generar un código libre tras varios intentos.
+ */
+async function issueWelcomeCoupon(userId) {
+  const base = `BIENVENIDA${userId.toString().slice(-6).toUpperCase()}`;
+  const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  for (let intento = 0; intento < 5; intento += 1) {
+    const code =
+      intento === 0
+        ? base
+        : `${base}${crypto.randomBytes(1).toString('hex').toUpperCase()}`;
+
+    if (await Coupon.findOne({ code })) continue;
+
+    try {
+      const coupon = await Coupon.create({
+        code,
+        type: 'percentage',
+        value: 15,
+        description: 'Cupón de bienvenida — 15% en tu primera cotización',
+        maxUses: 1,
+        validUntil,
+        ownerUserId: userId,
+        origin: 'welcome',
+        isActive: true,
+      });
+      return {
+        code: coupon.code,
+        type: coupon.type,
+        value: coupon.value,
+        description: coupon.description,
+        validUntil: coupon.validUntil,
+      };
+    } catch (err) {
+      if (err.code === 11000) continue; // colisión del índice único → reintentar
+      throw err;
+    }
+  }
+  throw new Error('No se pudo generar un código de cupón único');
 }
 
 // ── POST /api/auth/register ───────────────────────────────────────────────────
@@ -133,10 +179,20 @@ async function register(req, res) {
 
     const token = generateToken(user);
 
+    // Cupón de bienvenida (15%): se emite FUERA de la transacción para que un
+    // fallo aquí no revierta el registro. Si no se puede emitir, se omite.
+    let welcomeCoupon = null;
+    try {
+      welcomeCoupon = await issueWelcomeCoupon(user._id);
+    } catch (couponErr) {
+      console.error('No se pudo emitir el cupón de bienvenida:', couponErr.message);
+    }
+
     return created(res, {
       token,
       user: mapUserPublic(user),
       redirectTo: ROLE_REDIRECT[ROLES.CLIENTE],
+      welcomeCoupon,
     });
   } catch (error) {
     return serverError(res, error);

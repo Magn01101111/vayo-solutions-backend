@@ -21,6 +21,7 @@ const mlRoutes      = require('./ml.routes');
 const rewardsRoutes = require('./rewards.routes');
 const cartRoutes    = require('./cart.routes');
 const pushRoutes    = require('./push.routes');
+const notificationRoutes = require('./notification.routes');
 const router = express.Router();
 
 // Públicas
@@ -47,6 +48,7 @@ router.use('/api/upload', uploadRoutes);
 router.use('/api/ml',      mlRoutes);
 router.use('/api/rewards', rewardsRoutes);
 router.use('/api/cart',    cartRoutes);
-router.use('/api/devices', pushRoutes);
+router.use('/api/devices',       pushRoutes);
+router.use('/api/notifications', notificationRoutes);
 
 module.exports = router;

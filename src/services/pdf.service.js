@@ -369,7 +369,9 @@ const drawTotalsAndTerms = (doc, quote) => {
   lineRow('Subtotal', formatCurrency(totals.subtotal, currency));
 
   if ((totals.discount || 0) > 0) {
-    const code = quote.coupon?.code ? ` (${quote.coupon.code})` : '';
+    const cpn = quote.coupon || {};
+    const pct = cpn.type === 'percentage' && cpn.value ? ` · ${cpn.value}%` : '';
+    const code = cpn.code ? ` (${cpn.code}${pct})` : '';
     lineRow(`Descuento${code}`, `− ${formatCurrency(totals.discount, currency)}`, { color: COLORS.success });
   }
 

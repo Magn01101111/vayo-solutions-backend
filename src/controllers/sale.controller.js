@@ -21,6 +21,7 @@ function mapSale(sale) {
     clientId: sale.clientId,
     client: sale.client,
     items: sale.items ?? [],
+    coupon: sale.coupon ?? null,
     totals: sale.totals ?? {},
     currency: sale.currency,
     paymentMethod: sale.paymentMethod,
@@ -119,6 +120,15 @@ async function createSaleFromQuote(req, res) {
         quantity: it.quantity ?? 1,
         total: it.total ?? 0,
       })),
+      // Heredar el snapshot del cupón aplicado en la cotización (si lo hubo).
+      coupon: quote.coupon?.code
+        ? {
+            code: quote.coupon.code,
+            type: quote.coupon.type ?? '',
+            value: quote.coupon.value ?? 0,
+            description: quote.coupon.description ?? '',
+          }
+        : { code: '', type: '', value: 0, description: '' },
       totals: {
         subtotal: quote.totals?.subtotal ?? 0,
         discount: quote.totals?.discount ?? 0,

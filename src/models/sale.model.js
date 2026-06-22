@@ -56,6 +56,14 @@ const saleSchema = new mongoose.Schema(
       },
     ],
 
+    /** Snapshot del cupón aplicado (heredado de la cotización de origen). */
+    coupon: {
+      code: { type: String, default: '' },
+      type: { type: String, default: '' },
+      value: { type: Number, default: 0 },
+      description: { type: String, default: '' },
+    },
+
     /** Totales (snapshot). */
     totals: {
       subtotal: { type: Number, default: 0 },
