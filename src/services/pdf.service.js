@@ -189,6 +189,17 @@ const drawClientBlock = (doc, quote) => {
   if (c.phone) y1 = writeLine(c.phone, col1X, y1);
   if (c.businessActivity) y1 = writeLine(`Giro: ${c.businessActivity}`, col1X, y1);
 
+  // "Atendido por" — hace explícita la unión cliente/cotizador en el documento.
+  const authorName = quote.createdBy && typeof quote.createdBy === 'object'
+    ? quote.createdBy.name
+    : null;
+  const originLabel = quote.source === 'client'
+    ? 'Autogestión del cliente'
+    : quote.source === 'assisted'
+      ? `Atendido por: ${authorName || 'Equipo comercial'}`
+      : 'Cotización de invitado';
+  y1 = writeLine(originLabel, col1X, y1, { font: 'Helvetica-Oblique', gapAfter: 2 });
+
   // ─ Columna 2: Direcciones ────────────────────────────────────────────────
   let y2 = startY;
   y2 = writeTitle('Dirección de facturación', col2X, y2);

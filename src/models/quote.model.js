@@ -50,6 +50,20 @@ const quoteSchema = new mongoose.Schema(
       index: true,
     },
 
+    /**
+     * Origen de la cotización (cómo nació), para hacer explícita la dinámica
+     * cliente/cotizador en el panel y los documentos:
+     *   - 'client'   → la creó un CLIENTE con cuenta desde su portal.
+     *   - 'guest'    → la creó un visitante sin cuenta (queda ficha CRM por RUT).
+     *   - 'assisted' → la creó un COTIZADOR/ADMIN para un cliente (venta asistida).
+     */
+    source: {
+      type: String,
+      enum: ['client', 'guest', 'assisted'],
+      default: 'guest',
+      index: true,
+    },
+
     // ── Snapshot de datos del cliente al momento de la cotización ────────────
     client: {
       customerType: {

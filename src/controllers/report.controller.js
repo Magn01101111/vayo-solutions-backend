@@ -55,6 +55,14 @@ const fmtDate = (d) => {
   return isNaN(date) ? '' : date.toLocaleDateString('es-CL');
 };
 
+/** Etiqueta legible del origen de una cotización. */
+const sourceLabel = (s) =>
+  ({ client: 'Cliente (portal)', guest: 'Invitado', assisted: 'Venta asistida' }[s] || 'Invitado');
+
+/** Nombre del cotizador a partir de createdBy poblado. */
+const authorName = (doc) =>
+  doc.createdBy && typeof doc.createdBy === 'object' ? doc.createdBy.name || '' : '';
+
 // ── GET /api/reports/sales[.csv] ──────────────────────────────────────────────
 // Query: ?from= ?to= ?status= ?format=csv|json (default json)
 async function reportSales(req, res) {
@@ -62,7 +70,10 @@ async function reportSales(req, res) {
     const filter = dateRangeFilter(req.query);
     if (req.query.status) filter.status = req.query.status;
 
-    const sales = await Sale.find(filter).sort({ createdAt: -1 }).lean();
+    const sales = await Sale.find(filter)
+      .populate('createdBy', 'name')
+      .sort({ createdAt: -1 })
+      .lean();
 
     if (req.query.format === 'csv') {
       const headers = [
@@ -71,6 +82,7 @@ async function reportSales(req, res) {
         { label: 'Cliente',      value: (s) => s.client?.name || s.client?.company || '' },
         { label: 'RUT',          value: (s) => s.client?.taxId || '' },
         { label: 'Cotización',   value: (s) => s.quoteFolio || '' },
+        { label: 'Registrada por', value: (s) => authorName(s) },
         { label: 'Método pago',  value: (s) => s.paymentMethod || '' },
         { label: 'Estado',       value: (s) => s.status || '' },
         { label: 'Subtotal',     value: (s) => s.totals?.subtotal ?? 0 },
@@ -98,7 +110,10 @@ async function reportQuotes(req, res) {
     const filter = dateRangeFilter(req.query);
     if (req.query.status) filter['metadata.status'] = req.query.status;
 
-    const quotes = await Quote.find(filter).sort({ createdAt: -1 }).lean();
+    const quotes = await Quote.find(filter)
+      .populate('createdBy', 'name')
+      .sort({ createdAt: -1 })
+      .lean();
 
     if (req.query.format === 'csv') {
       const headers = [
@@ -107,6 +122,8 @@ async function reportQuotes(req, res) {
         { label: 'Cliente',    value: (q) => q.client?.name || q.client?.company || '' },
         { label: 'RUT',        value: (q) => q.client?.taxId || '' },
         { label: 'Email',      value: (q) => q.client?.email || '' },
+        { label: 'Origen',     value: (q) => sourceLabel(q.source) },
+        { label: 'Atendido por', value: (q) => authorName(q) },
         { label: 'Ítems',      value: (q) => (q.items || []).length },
         { label: 'Estado',     value: (q) => q.metadata?.status || '' },
         { label: 'Subtotal',   value: (q) => q.totals?.subtotal ?? 0 },

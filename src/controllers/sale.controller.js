@@ -13,6 +13,7 @@ const {
 } = require('../utils/response');
 
 function mapSale(sale) {
+  const author = sale.createdBy && typeof sale.createdBy === 'object' ? sale.createdBy : null;
   return {
     id: sale._id,
     folio: sale.folio,
@@ -27,6 +28,8 @@ function mapSale(sale) {
     paymentMethod: sale.paymentMethod,
     status: sale.status,
     notes: sale.notes,
+    createdBy: author ? { id: author._id, name: author.name } : (sale.createdBy ?? null),
+    createdByName: author?.name ?? null,
     createdAt: sale.createdAt,
     updatedAt: sale.updatedAt,
   };
@@ -43,7 +46,9 @@ async function getSales(req, res) {
       filter.clientId = req.query.clientId;
     }
 
-    const sales = await Sale.find(filter).sort({ createdAt: -1 });
+    const sales = await Sale.find(filter)
+      .populate('createdBy', 'name')
+      .sort({ createdAt: -1 });
     const mapped = sales.map(mapSale);
 
     // CLIENTE solo ve sus ventas
@@ -64,7 +69,7 @@ async function getSaleById(req, res) {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return fail(res, 'ID de venta inválido');
     }
-    const sale = await Sale.findById(req.params.id);
+    const sale = await Sale.findById(req.params.id).populate('createdBy', 'name');
     if (!sale) return notFound(res, 'Venta no encontrada');
 
     // CLIENTE solo ve sus propias ventas

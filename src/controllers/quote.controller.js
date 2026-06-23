@@ -155,14 +155,24 @@ function buildQuoteDoc(body = {}, req) {
     },
   };
 
-  // Asociar al CLIENTE autenticado si corresponde
-  if (req?.user?.role === ROLES.CLIENTE && req.user.clientId) {
-    doc.clientId = req.user.clientId;
-  }
-
-  // Registrar autor interno (venta asistida). En compra como invitado queda null.
-  if (req?.user && req.user.role !== ROLES.CLIENTE) {
+  // ── Origen + asociaciones (dinámica cliente/cotizador) ──────────────────────
+  if (req?.user?.role === ROLES.CLIENTE) {
+    // Cliente con cuenta: la cotización es suya.
+    if (req.user.clientId) doc.clientId = req.user.clientId;
+    doc.source = 'client';
+  } else if (req?.user) {
+    // Interno (COTIZADOR/ADMIN): venta asistida, queda registrado como autor.
     doc.createdBy = req.user.id;
+    doc.source = 'assisted';
+    // Asignación explícita a un cliente existente (buscado por RUT/nombre en el
+    // builder asistido). Si no viene, más abajo se deduplica por RUT.
+    const assignId = extra.assignClientId || body.assignClientId;
+    if (assignId && mongoose.Types.ObjectId.isValid(assignId)) {
+      doc.clientId = assignId;
+    }
+  } else {
+    // Visitante sin sesión.
+    doc.source = 'guest';
   }
 
   return doc;
@@ -199,6 +209,21 @@ function isPdfRequestAuthorized(req, quoteIdParam, quoteDoc) {
   }
 }
 
+/**
+ * Normaliza una cotización (lean, con createdBy poblado) para la respuesta:
+ * expone el cotizador como objeto {id,name} + un `createdByName` plano y
+ * mantiene `source`. Así el panel puede mostrar la unión cliente/cotizador.
+ */
+function mapQuote(q) {
+  const author = q.createdBy && typeof q.createdBy === 'object' ? q.createdBy : null;
+  return {
+    ...q,
+    createdBy: author ? { id: author._id, name: author.name, email: author.email } : (q.createdBy ?? null),
+    createdByName: author?.name ?? null,
+    source: q.source ?? (q.createdBy ? 'assisted' : (q.clientId ? 'client' : 'guest')),
+  };
+}
+
 // ── GET /api/quotes ───────────────────────────────────────────────────────────
 const getQuotes = async (req, res) => {
   try {
@@ -215,6 +240,9 @@ const getQuotes = async (req, res) => {
     }
     if (req.query.status) {
       filter['metadata.status'] = req.query.status;
+    }
+    if (req.query.source && ['client', 'guest', 'assisted'].includes(req.query.source)) {
+      filter.source = req.query.source;
     }
 
     if (req.user?.role === ROLES.CLIENTE) {
@@ -234,8 +262,11 @@ const getQuotes = async (req, res) => {
       }
     }
 
-    const quotes = await Quote.find(filter).sort({ createdAt: -1 });
-    return ok(res, quotes);
+    const quotes = await Quote.find(filter)
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+    return ok(res, quotes.map(mapQuote));
   } catch (error) {
     return serverError(res, error);
   }
@@ -270,7 +301,9 @@ const getQuoteById = async (req, res) => {
       return fail(res, 'ID de cotización inválido');
     }
 
-    const quote = await Quote.findById(req.params.id);
+    const quote = await Quote.findById(req.params.id)
+      .populate('createdBy', 'name email')
+      .lean();
     if (!quote) return notFound(res, 'Cotización no encontrada');
 
     if (req.user?.role === ROLES.CLIENTE) {
@@ -282,7 +315,7 @@ const getQuoteById = async (req, res) => {
       }
     }
 
-    return ok(res, quote);
+    return ok(res, mapQuote(quote));
   } catch (error) {
     return serverError(res, error);
   }
@@ -587,7 +620,7 @@ const downloadQuotePDF = async (req, res) => {
       return fail(res, 'ID de cotización inválido');
     }
 
-    const quote = await Quote.findById(req.params.id);
+    const quote = await Quote.findById(req.params.id).populate('createdBy', 'name');
     if (!quote) return notFound(res, 'Cotización no encontrada');
 
     if (!isPdfRequestAuthorized(req, req.params.id, quote)) {
@@ -620,7 +653,7 @@ const sendQuoteByEmail = async (req, res) => {
       return fail(res, 'ID de cotización inválido');
     }
 
-    const quote = await Quote.findById(req.params.id);
+    const quote = await Quote.findById(req.params.id).populate('createdBy', 'name');
     if (!quote) return notFound(res, 'Cotización no encontrada');
 
     const to = (req.body?.to || quote.client?.email || '').trim();

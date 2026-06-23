@@ -3,6 +3,7 @@ const Category = require('../models/category.model');
 const Client = require('../models/client.model');
 const Quote = require('../models/quote.model');
 const Sale = require('../models/sale.model');
+const Coupon = require('../models/coupon.model');
 const { ok, serverError } = require('../utils/response');
 
 // ── GET /api/stats/dashboard ──────────────────────────────────────────────────
@@ -16,13 +17,16 @@ async function getDashboardStats(req, res) {
       quoteCount,
       sales,
       quotes,
+      couponsRedeemed,
     ] = await Promise.all([
       Product.countDocuments({ isActive: true }),
       Category.countDocuments({ isActive: true }),
       Client.countDocuments({ isActive: true }),
       Quote.countDocuments({}),
       Sale.find({}).select('totals status createdAt items').lean(),
-      Quote.find({}).select('metadata createdAt').lean(),
+      Quote.find({}).select('metadata createdAt coupon totals').lean(),
+      // Cupones efectivamente consumidos (al menos un uso registrado).
+      Coupon.countDocuments({ usedCount: { $gt: 0 } }),
     ]);
 
     // ── Ingresos: suma de ventas no anuladas ────────────────────────────────
@@ -61,6 +65,12 @@ async function getDashboardStats(req, res) {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 5);
 
+    // ── Cupones: ahorro total otorgado (suma de descuentos en cotizaciones) ──
+    const couponSavings = quotes.reduce(
+      (acc, q) => acc + (q.coupon?.code ? (q.totals?.discount ?? 0) : 0),
+      0,
+    );
+
     return ok(res, {
       counters: {
         products: productCount,
@@ -77,6 +87,10 @@ async function getDashboardStats(req, res) {
       salesByMonth,
       quotesByStatus,
       topProducts,
+      coupons: {
+        redeemed: couponsRedeemed,
+        savings: couponSavings,
+      },
     });
   } catch (error) {
     return serverError(res, error);
