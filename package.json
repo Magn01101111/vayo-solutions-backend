@@ -27,7 +27,9 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/src/__tests__/**/*.test.js"],
+    "testMatch": [
+      "**/src/__tests__/**/*.test.js"
+    ],
     "collectCoverageFrom": [
       "src/utils/**/*.js",
       "src/controllers/coupon.controller.js"
@@ -49,7 +51,8 @@
     "multer": "^2.1.1",
     "node-cron": "^3.0.3",
     "nodemailer": "^8.0.7",
-    "pdfkit": "^0.18.0"
+    "pdfkit": "^0.18.0",
+    "transbank-sdk": "^6.1.1"
   },
   "devDependencies": {
     "jest": "^30.4.2",

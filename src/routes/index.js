@@ -22,11 +22,14 @@ const rewardsRoutes = require('./rewards.routes');
 const cartRoutes    = require('./cart.routes');
 const pushRoutes    = require('./push.routes');
 const notificationRoutes = require('./notification.routes');
+const paymentRoutes      = require('./payment.routes');
+const chatbotRoutes      = require('./chatbot.routes');
 const router = express.Router();
 
 // Públicas
 router.use('/',             healthRoutes);
 router.use('/api/auth',     authRoutes);
+router.use('/api/chatbot',  chatbotRoutes);
 
 // Protegidas (auth se aplica dentro de cada router)
 router.use('/api/users',      userRoutes);
@@ -50,5 +53,6 @@ router.use('/api/rewards', rewardsRoutes);
 router.use('/api/cart',    cartRoutes);
 router.use('/api/devices',       pushRoutes);
 router.use('/api/notifications', notificationRoutes);
+router.use('/api/payments',     paymentRoutes);
 
 module.exports = router;
