@@ -106,6 +106,22 @@ const quoteSchema = new mongoose.Schema(
       description: { type: String, default: '' },
     },
 
+    /**
+     * Descuento comercial definido por ADMIN/COTIZADOR.
+     * Es independiente del cupón: ambos terminan reflejados en totals.discount,
+     * pero este bloque deja trazabilidad de quién autorizó el ajuste manual.
+     */
+    manualDiscount: {
+      amount: { type: Number, default: 0 },
+      reason: { type: String, default: '' },
+      appliedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+      },
+      appliedAt: { type: Date, default: null },
+    },
+
     // ── Envío ────────────────────────────────────────────────────────────────
     shipping: {
       methodId: { type: String, default: 'pickup' },
@@ -133,7 +149,7 @@ const quoteSchema = new mongoose.Schema(
     },
     paymentTerms: {
       type: String,
-      enum: ['contado', '15-dias', '30-dias', '60-dias'],
+      enum: ['contado', '15-dias', '30-dias', '60-dias', '90-dias'],
       default: 'contado',
     },
     deliveryTerms: {

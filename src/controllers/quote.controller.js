@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const Quote = require('../models/quote.model');
+const Sale = require('../models/sale.model');
 const Client = require('../models/client.model');
 const Coupon = require('../models/coupon.model');
 const Product = require('../models/product.model');
@@ -224,6 +225,45 @@ function mapQuote(q) {
   };
 }
 
+function safeMoney(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.round(n)) : fallback;
+}
+
+function clampMoney(value, min, max) {
+  return Math.min(Math.max(safeMoney(value), min), max);
+}
+
+function deliveryTermForShipping(methodId) {
+  if (methodId === 'pickup') return 'pickup';
+  if (methodId === 'national') return 'shipping';
+  return 'delivery';
+}
+
+function recalculateQuoteTotals(quote, discountAmount) {
+  const subtotal = (quote.items ?? []).reduce((sum, item) => {
+    const lineTotal = Number(item.total);
+    if (Number.isFinite(lineTotal)) return sum + lineTotal;
+    return sum + (Number(item.price) || 0) * (Number(item.quantity) || 0);
+  }, 0);
+  const discount = clampMoney(discountAmount, 0, subtotal);
+  const taxableBase = Math.max(0, subtotal - discount);
+  const ivaPercent = quote.totals?.ivaPercent ?? 19;
+  const iva = Math.round(taxableBase * (ivaPercent / 100));
+  const shipping = safeMoney(quote.shipping?.cost ?? quote.totals?.shipping ?? 0);
+
+  quote.totals = {
+    ...(quote.totals?.toObject ? quote.totals.toObject() : quote.totals),
+    subtotal,
+    discount,
+    taxableBase,
+    iva,
+    ivaPercent,
+    shipping,
+    total: taxableBase + iva + shipping,
+  };
+}
+
 // ── GET /api/quotes ───────────────────────────────────────────────────────────
 const getQuotes = async (req, res) => {
   try {
@@ -380,6 +420,85 @@ const updateQuoteStatus = async (req, res) => {
  * Resuelve el email al que enviar notificaciones internas de una cotización.
  * Prioridad: autor (createdBy) > email de la empresa > null.
  */
+// ADMIN/COTIZADOR: aplica descuento manual y/o corrige terminos comerciales.
+// Webpay se mantiene como pago inmediato; paymentTerms queda como condicion
+// comercial de la cotizacion y no como cuotas/deuda dentro de Transbank.
+const updateQuoteCommercialTerms = async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return fail(res, 'ID de cotizacion invalido');
+    }
+
+    const quote = await Quote.findById(req.params.id);
+    if (!quote) return notFound(res, 'Cotizacion no encontrada');
+
+    const existingSale = await Sale.findOne({ quoteId: quote._id }).select('_id folio').lean();
+    if (existingSale) {
+      return fail(
+        res,
+        `La cotizacion ya fue convertida en la venta ${existingSale.folio}. Ajusta la venta o crea una nueva cotizacion.`,
+        409
+      );
+    }
+
+    const body = req.body || {};
+    const currentDiscount = quote.manualDiscount?.amount ?? quote.totals?.discount ?? 0;
+    const requestedDiscount = body.discount ?? body.manualDiscount?.amount ?? currentDiscount;
+    const subtotalForClamp = (quote.items ?? []).reduce((sum, item) => {
+      const lineTotal = Number(item.total);
+      if (Number.isFinite(lineTotal)) return sum + lineTotal;
+      return sum + (Number(item.price) || 0) * (Number(item.quantity) || 0);
+    }, 0);
+    const discount = clampMoney(requestedDiscount, 0, subtotalForClamp);
+    const reason = String(body.reason ?? body.manualDiscount?.reason ?? quote.manualDiscount?.reason ?? '')
+      .trim()
+      .slice(0, 300);
+
+    if (body.shipping) {
+      const methodId = String(body.shipping.methodId ?? body.shipping.method?.id ?? quote.shipping?.methodId ?? 'pickup');
+      const methodLabel = String(body.shipping.methodLabel ?? body.shipping.method?.label ?? quote.shipping?.methodLabel ?? 'Retiro en tienda');
+      const estimatedDays = String(body.shipping.estimatedDays ?? body.shipping.method?.estimatedDays ?? quote.shipping?.estimatedDays ?? '');
+      const cost = safeMoney(body.shipping.cost ?? body.shipping.method?.cost ?? quote.shipping?.cost ?? 0);
+
+      quote.shipping = { methodId, methodLabel, estimatedDays, cost };
+    }
+
+    const allowedPaymentTerms = ['contado', '15-dias', '30-dias', '60-dias', '90-dias'];
+    if (body.paymentTerms != null) {
+      if (!allowedPaymentTerms.includes(body.paymentTerms)) {
+        return fail(res, `Forma de pago invalida. Use: ${allowedPaymentTerms.join(', ')}`);
+      }
+      quote.paymentTerms = body.paymentTerms;
+    }
+
+    const allowedDeliveryTerms = ['pickup', 'delivery', 'shipping'];
+    if (body.deliveryTerms != null) {
+      if (!allowedDeliveryTerms.includes(body.deliveryTerms)) {
+        return fail(res, `Tipo de entrega invalido. Use: ${allowedDeliveryTerms.join(', ')}`);
+      }
+      quote.deliveryTerms = body.deliveryTerms;
+    } else if (body.shipping) {
+      quote.deliveryTerms = deliveryTermForShipping(quote.shipping?.methodId);
+    }
+
+    quote.manualDiscount = {
+      amount: discount,
+      reason: discount > 0 ? reason : '',
+      appliedBy: discount > 0 ? (req.user?.id ?? null) : null,
+      appliedAt: discount > 0 ? new Date() : null,
+    };
+
+    recalculateQuoteTotals(quote, discount);
+    await quote.save();
+    await quote.populate('createdBy', 'name email');
+
+    return ok(res, mapQuote(quote.toObject()));
+  } catch (error) {
+    return serverError(res, error);
+  }
+};
+
+// Email interno para notificaciones: autor (createdBy) > empresa > null.
 async function resolveNotificationEmail(quote) {
   try {
     if (quote.createdBy) {
@@ -717,6 +836,7 @@ module.exports = {
   getQuoteById,
   getQuoteByFolio,
   updateQuoteStatus,
+  updateQuoteCommercialTerms,
   markQuoteViewed,
   sendQuoteByEmail,
   downloadQuotePDF,

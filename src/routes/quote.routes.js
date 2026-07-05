@@ -5,6 +5,7 @@ const {
   getQuoteById,
   getQuoteByFolio,
   updateQuoteStatus,
+  updateQuoteCommercialTerms,
   markQuoteViewed,
   sendQuoteByEmail,
   downloadQuotePDF,
@@ -30,6 +31,13 @@ router.get('/:id', verifyToken, getQuoteById);
 
 // Cambiar estado — control de roles en el controller
 router.patch('/:id/status', verifyToken, updateQuoteStatus);
+
+router.patch(
+  '/:id/commercial-terms',
+  verifyToken,
+  requireRole(ROLES.ADMIN, ROLES.COTIZADOR),
+  updateQuoteCommercialTerms
+);
 
 // Marcar como vista por el cliente (primera apertura)
 router.patch('/:id/mark-viewed', verifyToken, markQuoteViewed);

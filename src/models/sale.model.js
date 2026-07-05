@@ -1,5 +1,18 @@
 const mongoose = require('mongoose');
 
+const addressSchema = new mongoose.Schema(
+  {
+    street: { type: String, default: '' },
+    number: { type: String, default: '' },
+    apt: { type: String, default: '' },
+    city: { type: String, default: '' },
+    region: { type: String, default: '' },
+    zip: { type: String, default: '' },
+    reference: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
 /**
  * Venta — se genera al convertir una cotización aceptada en venta.
  *
@@ -62,6 +75,40 @@ const saleSchema = new mongoose.Schema(
       type: { type: String, default: '' },
       value: { type: Number, default: 0 },
       description: { type: String, default: '' },
+    },
+
+    manualDiscount: {
+      amount: { type: Number, default: 0 },
+      reason: { type: String, default: '' },
+      appliedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+      },
+      appliedAt: { type: Date, default: null },
+    },
+
+    billingAddress: { type: addressSchema, default: () => ({}) },
+    shippingAddress: { type: addressSchema, default: () => ({}) },
+    shippingSameAsBilling: { type: Boolean, default: true },
+
+    shipping: {
+      methodId: { type: String, default: 'pickup' },
+      methodLabel: { type: String, default: 'Retiro en tienda' },
+      estimatedDays: { type: String, default: '' },
+      cost: { type: Number, default: 0 },
+    },
+
+    paymentTerms: {
+      type: String,
+      enum: ['contado', '15-dias', '30-dias', '60-dias', '90-dias'],
+      default: 'contado',
+    },
+
+    deliveryTerms: {
+      type: String,
+      enum: ['pickup', 'delivery', 'shipping'],
+      default: 'pickup',
     },
 
     /** Totales (snapshot). */
