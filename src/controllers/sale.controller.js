@@ -129,6 +129,10 @@ async function createSaleFromQuote(req, res) {
         name: it.name,
         sku: it.sku ?? '',
         price: it.price ?? 0,
+        listPrice: it.listPrice ?? null,
+        offerPrice: it.offerPrice ?? null,
+        offerApplied: !!it.offerApplied,
+        offerDiscountPercent: it.offerDiscountPercent ?? 0,
         quantity: it.quantity ?? 1,
         total: it.total ?? 0,
       })),
@@ -142,6 +146,7 @@ async function createSaleFromQuote(req, res) {
         }
         : { code: '', type: '', value: 0, description: '' },
       manualDiscount: {
+        percent: quote.manualDiscount?.percent ?? 0,
         amount: quote.manualDiscount?.amount ?? 0,
         reason: quote.manualDiscount?.reason ?? '',
         appliedBy: quote.manualDiscount?.appliedBy ?? null,

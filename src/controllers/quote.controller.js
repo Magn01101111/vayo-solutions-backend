@@ -10,7 +10,6 @@ const Notification = require('../models/notification.model');
 const { evaluateCoupon, consumeCoupon } = require('./coupon.controller');
 const { generateQuotePDF } = require('../services/pdf.service');
 const {
-  sendQuoteEmail,
   sendQuoteViewedNotification,
   sendQuoteStatusNotification,
 } = require('../services/email.service');
@@ -77,12 +76,6 @@ function buildQuoteDoc(body = {}, req) {
   const extra = body.extra || {};
   const baseClient = body.client || {};
 
-  // Mapa rápido de notas por productId
-  const notesByProduct = {};
-  (extra.itemNotes || []).forEach((n) => {
-    if (n && n.productId) notesByProduct[n.productId] = n.note || '';
-  });
-
   const subtotal = body.totals?.subtotal ?? 0;
   const discount = extra.discount ?? 0;
   const iva = body.totals?.iva ?? 0;
@@ -110,9 +103,13 @@ function buildQuoteDoc(body = {}, req) {
       name: it.name,
       sku: it.sku || '',
       price: Number(it.price) || 0,
+      listPrice: it.listPrice == null ? null : Number(it.listPrice),
+      offerPrice: it.offerPrice == null ? null : Number(it.offerPrice),
+      offerApplied: !!it.offerApplied,
+      offerDiscountPercent: Number(it.offerDiscountPercent) || 0,
       quantity: Number(it.quantity) || 1,
       total: Number(it.total) || 0,
-      notes: notesByProduct[it.productId] || '',
+      notes: '',
     })),
 
     coupon: extra.coupon
@@ -146,7 +143,7 @@ function buildQuoteDoc(body = {}, req) {
     validityDays: Number(extra.validityDays) || 30,
     validUntil: extra.validUntil ? new Date(extra.validUntil) : null,
 
-    generalNotes: extra.generalNotes || '',
+    generalNotes: String(extra.generalNotes || '').trim().slice(0, 50),
     acceptsTerms: !!extra.acceptsTerms,
     acceptsMarketing: !!extra.acceptsMarketing,
 
@@ -232,6 +229,12 @@ function safeMoney(value, fallback = 0) {
 
 function clampMoney(value, min, max) {
   return Math.min(Math.max(safeMoney(value), min), max);
+}
+
+function clampPercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(100, Math.max(0, Math.round(n * 100) / 100));
 }
 
 function deliveryTermForShipping(methodId) {
@@ -384,9 +387,19 @@ const updateQuoteStatus = async (req, res) => {
       if (!allowed.includes(status)) {
         return fail(res, `Estado inválido. Use: ${allowed.join(', ')}`);
       }
+      if (status === 'accepted') {
+        const existingSale = await Sale.findOne({ quoteId: quote._id }).select('_id').lean();
+        if (!existingSale) {
+          return fail(
+            res,
+            'Para aceptar una cotizacion usa "Aceptar y crear venta"; no se permite dejarla aceptada sin venta asociada.',
+            409
+          );
+        }
+      }
     } else if (isClientOwner) {
-      if (!['accepted', 'rejected'].includes(status)) {
-        return fail(res, 'Solo puedes aceptar o rechazar esta cotización');
+      if (!['rejected'].includes(status)) {
+        return fail(res, 'El cliente no puede aceptar manualmente: debe pagar una cotizacion aceptada por el equipo comercial.');
       }
     } else {
       return fail(res, 'No tienes permiso para modificar esta cotización', 403);
@@ -397,7 +410,7 @@ const updateQuoteStatus = async (req, res) => {
     await quote.save();
 
     // Notificar al cotizador/admin cuando el CLIENTE acepta o rechaza
-    if (isClientOwner && (status === 'accepted' || status === 'rejected')) {
+    if (isClientOwner && status === 'rejected') {
       resolveNotificationEmail(quote).then((to) => {
         if (to) {
           sendQuoteStatusNotification({
@@ -442,14 +455,20 @@ const updateQuoteCommercialTerms = async (req, res) => {
     }
 
     const body = req.body || {};
-    const currentDiscount = quote.manualDiscount?.amount ?? quote.totals?.discount ?? 0;
-    const requestedDiscount = body.discount ?? body.manualDiscount?.amount ?? currentDiscount;
     const subtotalForClamp = (quote.items ?? []).reduce((sum, item) => {
       const lineTotal = Number(item.total);
       if (Number.isFinite(lineTotal)) return sum + lineTotal;
       return sum + (Number(item.price) || 0) * (Number(item.quantity) || 0);
     }, 0);
-    const discount = clampMoney(requestedDiscount, 0, subtotalForClamp);
+    const hasPercentInput = body.discountPercent != null || body.manualDiscount?.percent != null;
+    const hasAmountInput = body.discount != null || body.manualDiscount?.amount != null;
+    const requestedPercent = hasPercentInput
+      ? (body.discountPercent ?? body.manualDiscount?.percent)
+      : hasAmountInput
+        ? ((body.discount ?? body.manualDiscount?.amount ?? 0) / Math.max(1, subtotalForClamp)) * 100
+        : (quote.manualDiscount?.percent ?? 0);
+    const discountPercent = clampPercent(requestedPercent);
+    const discount = clampMoney(subtotalForClamp * (discountPercent / 100), 0, subtotalForClamp);
     const reason = String(body.reason ?? body.manualDiscount?.reason ?? quote.manualDiscount?.reason ?? '')
       .trim()
       .slice(0, 300);
@@ -482,6 +501,7 @@ const updateQuoteCommercialTerms = async (req, res) => {
     }
 
     quote.manualDiscount = {
+      percent: discount > 0 ? discountPercent : 0,
       amount: discount,
       reason: discount > 0 ? reason : '',
       appliedBy: discount > 0 ? (req.user?.id ?? null) : null,
@@ -607,6 +627,19 @@ const createQuote = async (req, res) => {
         );
       }
 
+      const quantity = Math.max(1, Number(it.quantity) || 1);
+      const hasStockForQuantity = Number(product.stock) >= quantity;
+      const isPurchasable =
+        product.availabilityStatus === 'in_stock' &&
+        hasStockForQuantity;
+      if (!isPurchasable) {
+        return fail(
+          res,
+          `El producto "${product.name}" no tiene stock disponible para cotizar`,
+          422
+        );
+      }
+
       const now = new Date();
       const isOnOffer =
         product.offerPrice != null &&
@@ -625,7 +658,10 @@ const createQuote = async (req, res) => {
         );
       }
 
-      const quantity = Math.max(1, Number(it.quantity) || 1);
+      const listPrice = Number(product.price) || realPrice;
+      const offerDiscountPercent = isOnOffer && listPrice > 0
+        ? Math.round((1 - (realPrice / listPrice)) * 100)
+        : 0;
       const itemTotal = realPrice * quantity;
       subtotal += itemTotal;
 
@@ -634,9 +670,13 @@ const createQuote = async (req, res) => {
         name: product.name,
         sku: product.sku || '',
         price: realPrice,
+        listPrice,
+        offerPrice: isOnOffer ? realPrice : null,
+        offerApplied: isOnOffer,
+        offerDiscountPercent,
         quantity,
         total: itemTotal,
-        notes: it.notes || '',
+        notes: '',
       });
     }
 
@@ -763,46 +803,6 @@ const downloadQuotePDF = async (req, res) => {
   }
 };
 
-// ── POST /api/quotes/:id/send-email ───────────────────────────────────────────
-// Genera el PDF y lo envía por correo. Body opcional: { to: 'email@dest' }.
-// Si no se especifica `to`, usa el email del cliente de la cotización.
-const sendQuoteByEmail = async (req, res) => {
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return fail(res, 'ID de cotización inválido');
-    }
-
-    const quote = await Quote.findById(req.params.id).populate('createdBy', 'name');
-    if (!quote) return notFound(res, 'Cotización no encontrada');
-
-    const to = (req.body?.to || quote.client?.email || '').trim();
-    if (!to) {
-      return fail(res, 'No hay email de destino. La cotización no tiene email de cliente.');
-    }
-
-    const company = await Company.findOne().lean().catch(() => ({}));
-    const pdfBuffer = await generateQuotePDF(quote, company || {});
-
-    const result = await sendQuoteEmail({
-      to,
-      folio: quote.folio,
-      clientName: quote.client?.name,
-      pdfBuffer,
-      total: quote.totals?.total,
-    });
-
-    if (result.simulated) {
-      return ok(res, {
-        message: `Email simulado a ${to} (SMTP no configurado en el servidor).`,
-        simulated: true,
-      });
-    }
-    return ok(res, { message: `Cotización enviada a ${to}.` });
-  } catch (error) {
-    return serverError(res, error);
-  }
-};
-
 // ── POST /api/quotes/:id/duplicate ────────────────────────────────────────────
 async function duplicateQuote(req, res) {
   try {
@@ -838,7 +838,6 @@ module.exports = {
   updateQuoteStatus,
   updateQuoteCommercialTerms,
   markQuoteViewed,
-  sendQuoteByEmail,
   downloadQuotePDF,
   duplicateQuote,
 };

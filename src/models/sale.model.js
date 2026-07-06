@@ -64,6 +64,10 @@ const saleSchema = new mongoose.Schema(
         name: { type: String },
         sku: { type: String, default: '' },
         price: { type: Number, default: 0 },
+        listPrice: { type: Number, default: null },
+        offerPrice: { type: Number, default: null },
+        offerApplied: { type: Boolean, default: false },
+        offerDiscountPercent: { type: Number, default: 0 },
         quantity: { type: Number, default: 1 },
         total: { type: Number, default: 0 },
       },
@@ -78,6 +82,7 @@ const saleSchema = new mongoose.Schema(
     },
 
     manualDiscount: {
+      percent: { type: Number, default: 0 },
       amount: { type: Number, default: 0 },
       reason: { type: String, default: '' },
       appliedBy: {

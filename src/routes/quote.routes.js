@@ -7,7 +7,6 @@ const {
   updateQuoteStatus,
   updateQuoteCommercialTerms,
   markQuoteViewed,
-  sendQuoteByEmail,
   downloadQuotePDF,
   duplicateQuote,
 } = require('../controllers/quote.controller');
@@ -43,8 +42,6 @@ router.patch(
 router.patch('/:id/mark-viewed', verifyToken, markQuoteViewed);
 
 // Enviar por email (con PDF adjunto) — usuario autenticado
-router.post('/:id/send-email', verifyToken, sendQuoteByEmail);
-
 // PDF
 router.get('/:id/pdf', optionalAuth, downloadQuotePDF);
 

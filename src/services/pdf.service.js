@@ -288,9 +288,11 @@ const drawItemsTable = (doc, quote) => {
         .text(`SKU: ${item.sku}`, cols.prod.x + 4, cellBottom, { width: cols.prod.w - 8 });
       cellBottom = doc.y;
     }
-    if (item.notes) {
-      doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLORS.muted)
-        .text(`Nota: ${item.notes}`, cols.prod.x + 4, cellBottom, { width: cols.prod.w - 8 });
+    if (item.offerApplied) {
+      const pct = item.offerDiscountPercent ? ` -${item.offerDiscountPercent}%` : '';
+      const before = item.listPrice ? `Antes ${formatCurrency(item.listPrice, currency)}. ` : '';
+      doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLORS.success)
+        .text(`Oferta aplicada:${pct}. ${before}Precio oferta ${formatCurrency(item.price, currency)}.`, cols.prod.x + 4, cellBottom, { width: cols.prod.w - 8 });
       cellBottom = doc.y;
     }
 
@@ -380,12 +382,18 @@ const drawTotalsAndTerms = (doc, quote) => {
   lineRow('Subtotal', formatCurrency(totals.subtotal, currency));
 
   if ((totals.discount || 0) > 0) {
+    const manual = quote.manualDiscount || {};
+    if (manual.amount) {
+      const manualPct = manual.percent ? ` (${manual.percent}%)` : '';
+      lineRow(`Ajuste comercial${manualPct}`, `- ${formatCurrency(totals.discount, currency)}`, { color: COLORS.success });
+    } else {
     const cpn = quote.coupon || {};
     const pct = cpn.type === 'percentage' && cpn.value ? ` · ${cpn.value}%` : '';
     const code = cpn.code ? ` (${cpn.code}${pct})` : '';
     lineRow(`Descuento${code}`, `− ${formatCurrency(totals.discount, currency)}`, { color: COLORS.success });
   }
 
+    }
   const ivaPercent = totals.ivaPercent ?? 19;
   lineRow(`IVA (${ivaPercent}%)`, formatCurrency(totals.iva, currency));
 
